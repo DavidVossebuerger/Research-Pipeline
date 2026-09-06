@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-pipeline"
+version = "0.1.0"
+description = "Daily arXiv quant-finance paper scoring pipeline with local LLM"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "arxiv>=2.1.0",
+    "httpx>=0.27.0",
+    "pypdf>=5.0.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest", "pytest-cov"]
+
+[project.scripts]
+research-pipeline = "research_pipeline.cli:main"
+research-pipeline-install = "research_pipeline.install.wizard:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["research_pipeline*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
