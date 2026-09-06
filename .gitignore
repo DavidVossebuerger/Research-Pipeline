@@ -1,0 +1,39 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.bak
+secrets/
+
+# Runtime state
+data/state.db
+data/state.db-*
+data/snapshots/
+data/autobuild/
+pdfs/
+logs/
+projects/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Session logs (private working artifacts)
+session-*.md
