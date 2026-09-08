@@ -158,7 +158,11 @@ def install(yes: bool):
 
         # Validate Python on remote
         click.echo("  Verifying Python 3.11+ on remote...")
-        python_version = ssh_conn.check_python()
+        try:
+            python_version = ssh_conn.check_python()
+        except RemoteInstallError as e:
+            click.echo(f"  ✗ {e}")
+            sys.exit(1)
         if not python_version:
             click.echo("  ✗ Python 3.11+ not found on remote")
             sys.exit(1)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -19,21 +20,48 @@ class SSHConnection:
     password: str
     port: int = 22
 
-    def _sshpass_args(self, *cmd: str, input: bytes | None = None, check: bool = True) -> list[str]:
-        return [
+    def _sshpass_env_args(self, *cmd: str, connect_timeout: int = 30) -> tuple[dict, list[str]]:
+        """Build sshpass + ssh invocation. Passes the password via the SSHPASS env
+        variable instead of `-p` so it doesn't show up in `ps auxe`.
+        """
+        env = {**os.environ, "SSHPASS": self.password}
+        args = [
             "sshpass",
-            "-p",
-            self.password,
+            "-e",  # read password from SSHPASS env var
             "ssh",
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
             "UserKnownHostsFile=" + str(Path.home() / ".ssh" / "known_hosts_research_pipeline"),
+            "-o",
+            f"ConnectTimeout={connect_timeout}",
             "-p",
             str(self.port),
             f"{self.user}@{self.host}",
             *cmd,
         ]
+        return env, args
+
+    def _scp_env_args(
+        self, local_path: Path, remote_path: str, *, connect_timeout: int = 30
+    ) -> tuple[dict, list[str]]:
+        env = {**os.environ, "SSHPASS": self.password}
+        args = [
+            "sshpass",
+            "-e",
+            "scp",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "UserKnownHostsFile=" + str(Path.home() / ".ssh" / "known_hosts_research_pipeline"),
+            "-o",
+            f"ConnectTimeout={connect_timeout}",
+            "-P",
+            str(self.port),
+            str(local_path),
+            f"{self.user}@{self.host}:{remote_path}",
+        ]
+        return env, args
 
     def check_local_requirements(self) -> None:
         """Verify sshpass is installed locally. Raises if not."""
@@ -45,53 +73,99 @@ class SSHConnection:
                 "  Fedora: sudo dnf install sshpass"
             )
 
+    def _run_silent(
+        self, args: list[str], env: dict, *, timeout: int
+    ) -> subprocess.CompletedProcess:
+        """Run a command and convert common subprocess failures into RemoteInstallError."""
+        try:
+            return subprocess.run(
+                args,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            raise RemoteInstallError(
+                f"SSH command timed out after {timeout}s. Possible causes:\n"
+                f"  - Hostname '{self.host}' doesn't resolve (check DNS, try FQDN or IP)\n"
+                f"  - SSH port {self.port} blocked by firewall\n"
+                f"  - Remote host unreachable\n"
+                f"  - SSH server slow to authenticate\n"
+                f"Try: ssh -v {self.user}@{self.host}  (to see what ssh itself reports)"
+            ) from None
+        except FileNotFoundError as e:
+            raise RemoteInstallError(f"Required command not found: {e}") from None
+        except OSError as e:
+            raise RemoteInstallError(f"OS error while running ssh: {e}") from None
+
     def check_connection(self) -> tuple[bool, str]:
-        """Verify SSH connection works. Returns (ok, ssh_banner)."""
-        result = subprocess.run(
-            self._sshpass_args("echo", "ok"),
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        """Verify SSH connection works. Returns (ok, message)."""
+        env, args = self._sshpass_env_args("echo", "ok")
+        try:
+            result = self._run_silent(args, env, timeout=30)
+        except RemoteInstallError as e:
+            return False, str(e)
+
         if result.returncode != 0:
-            return False, result.stderr.strip()
+            stderr = result.stderr.strip()
+            if "Permission denied" in stderr:
+                msg = "Authentication failed (Permission denied). Check username and password."
+            elif "Could not resolve hostname" in stderr or "Name or service not known" in stderr:
+                msg = f"Hostname '{self.host}' doesn't resolve. Try the FQDN or IP address."
+            elif "Connection refused" in stderr:
+                msg = f"SSH port {self.port} refused on {self.host}. Is sshd running?"
+            elif "Connection timed out" in stderr or "timed out" in stderr.lower():
+                msg = f"Connection timed out. Check network/firewall for {self.host}:{self.port}."
+            else:
+                msg = stderr or f"ssh returned exit code {result.returncode}"
+            return False, msg
+
         return True, "ok"
 
     def check_python(self) -> str | None:
         """Return remote python3.11+ version string, or None if missing."""
-        result = subprocess.run(
-            self._sshpass_args("command -v python3.11 || command -v python3 || echo none"),
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
+        env, args = self._sshpass_env_args(
+            "command -v python3.11 || command -v python3 || echo none"
         )
+        try:
+            result = self._run_silent(args, env, timeout=30)
+        except RemoteInstallError as e:
+            raise RemoteInstallError(f"Python check failed: {e}") from e
+
         if result.returncode != 0 or "none" in result.stdout:
             return None
-        version_result = subprocess.run(
-            self._sshpass_args(result.stdout.strip(), "--version"),
-            capture_output=True,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        python_path = result.stdout.strip()
+        env, args = self._sshpass_env_args(python_path, "--version")
+        try:
+            version_result = self._run_silent(args, env, timeout=30)
+        except RemoteInstallError as e:
+            raise RemoteInstallError(f"Python version check failed: {e}") from e
         return version_result.stdout.strip() if version_result.returncode == 0 else None
 
     def stream_command(self, command: str, *, timeout: int = 1800) -> int:
-        """Run a command on the remote host, streaming stdout/stderr live to the local terminal.
+        """Run a command on the remote host, streaming stdout/stderr live.
 
         Returns the remote exit code. Raises RemoteInstallError on connection failure.
         """
         import sys
 
-        proc = subprocess.Popen(
-            self._sshpass_args(command),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # merge so the user sees a single chronological stream
-            bufsize=1,
-            text=True,
-        )
+        env, args = self._sshpass_env_args(command, connect_timeout=30)
+        try:
+            proc = subprocess.Popen(
+                args,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                text=True,
+            )
+        except FileNotFoundError as e:
+            raise RemoteInstallError(f"sshpass not found: {e}") from None
+        except OSError as e:
+            raise RemoteInstallError(f"Failed to start ssh: {e}") from None
+
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -100,33 +174,21 @@ class SSHConnection:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             proc.kill()
-            raise RemoteInstallError(f"Remote command timed out after {timeout}s")
+            raise RemoteInstallError(f"Remote command timed out after {timeout}s") from None
         except KeyboardInterrupt:
             proc.kill()
-            raise RemoteInstallError("Aborted by user (Ctrl+C)")
+            raise RemoteInstallError("Aborted by user (Ctrl+C)") from None
         return proc.returncode
 
     def upload_file(self, local_path: Path, remote_path: str) -> None:
         """Upload a file via scp+sshpass."""
-        result = subprocess.run(
-            [
-                "sshpass",
-                "-p",
-                self.password,
-                "scp",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                "UserKnownHostsFile=" + str(Path.home() / ".ssh" / "known_hosts_research_pipeline"),
-                "-P",
-                str(self.port),
-                str(local_path),
-                f"{self.user}@{self.host}:{remote_path}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
+        env, args = self._scp_env_args(local_path, remote_path)
+        try:
+            result = self._run_silent(args, env, timeout=60)
+        except RemoteInstallError as e:
+            raise RemoteInstallError(f"SCP upload failed: {e}") from e
         if result.returncode != 0:
-            raise RemoteInstallError(f"SCP upload failed: {result.stderr.strip()}")
+            stderr = result.stderr.strip()
+            raise RemoteInstallError(
+                f"SCP upload failed: {stderr or f'exit code {result.returncode}'}"
+            )
