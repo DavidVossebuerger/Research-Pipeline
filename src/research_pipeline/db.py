@@ -151,6 +151,21 @@ def list_top_deep_scored(
     return [dict(row) for row in rows]
 
 
+def list_papers_in_range(
+    conn: sqlite3.Connection,
+    since: datetime,
+    until: datetime,
+) -> list[dict]:
+    """List papers in a datetime range ordered by deep_score DESC NULLS LAST, published_at DESC."""
+    rows = conn.execute(
+        """SELECT * FROM papers
+           WHERE published_at >= ? AND published_at < ?
+           ORDER BY CASE WHEN deep_score IS NULL THEN 1 ELSE 0 END, deep_score DESC, published_at DESC""",
+        (since.isoformat(), until.isoformat()),
+    )
+    return [dict(row) for row in rows]
+
+
 def mark_picked(conn: sqlite3.Connection, arxiv_id: str) -> None:
     """Mark a paper as picked."""
     conn.execute(
