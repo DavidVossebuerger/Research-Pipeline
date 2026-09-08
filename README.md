@@ -62,6 +62,54 @@ Each feature can be enabled/disabled during install:
 - 8 GB RAM minimum, 16 GB recommended (Ollama model needs ~4 GB)
 - Internet access (arXiv + optional Telegram API)
 
+## Documentation
+
+- [`docs/INSTALL.md`](docs/INSTALL.md) — full install walkthrough, cron wiring, troubleshooting.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — module map, data model, extension points.
+- [`docs/PROMPTS.md`](docs/PROMPTS.md) — how the two scoring prompts work, how to customize them.
+
+## CLI
+
+```
+research-pipeline              # entry: research_pipeline.cli:main
+  run [--dry-run] [--lookback N] [--max N] [--json]
+  doctor
+  status
+  logs [-f]
+  backfill stage-a [--days N] [--limit N] [--dry-run]
+  backfill stage-b [--days N] [--threshold F] [--limit N] [--dry-run]
+  backfill notify  [--days N] [--dry-run]
+
+research-pipeline-install      # entry: research_pipeline.install.wizard:main
+  install          # full interactive wizard
+  config get|set KEY VAL
+  run
+  update
+  status
+  logs [-f]
+  diagnose
+  uninstall
+  doctor
+```
+
+## Development
+
+```bash
+.venv/bin/pytest -v
+.venv/bin/ruff check src/ tests/
+.venv/bin/ruff format --check src/ tests/
+```
+
+CI runs all three on every PR (`.github/workflows/ci.yml`, Python 3.11 +
+3.12 matrix).
+
+## Contributing
+
+Open an issue or a PR. Branch off `main`, follow the existing module
+boundaries (`db`, `score`, `notify`, `fetch_arxiv`, `pdf_extract`,
+`runtime/runner`, install CLI), keep the sanitization rules from the
+spec in mind (no private user paths, no proprietary defaults).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
