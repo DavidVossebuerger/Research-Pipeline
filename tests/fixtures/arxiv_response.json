@@ -1,0 +1,29 @@
+[
+  {
+    "arxiv_id": "2509.01234",
+    "title": "Deep Learning for Quantitative Finance: A Survey",
+    "authors": ["Jane Smith", "Bob Johnson"],
+    "abstract": "We present a comprehensive survey of deep learning applications in quantitative finance...",
+    "categories": ["q-fin.GN", "cs.LG"],
+    "pdf_url": "https://arxiv.org/pdf/2509.01234.pdf",
+    "published_at": "2026-09-08T10:00:00+00:00"
+  },
+  {
+    "arxiv_id": "2509.05678",
+    "title": "Attention Mechanisms for Time Series Prediction",
+    "authors": ["Alice Wang", "Charlie Chen", "David Lee"],
+    "abstract": "This paper introduces novel attention mechanisms specifically designed for financial time series...",
+    "categories": ["q-fin.TR", "stat.ML"],
+    "pdf_url": "https://arxiv.org/pdf/2509.05678.pdf",
+    "published_at": "2026-09-07T20:00:00+00:00"
+  },
+  {
+    "arxiv_id": "2508.99999",
+    "title": "Reinforcement Learning in Portfolio Optimization",
+    "authors": ["Eve Brown"],
+    "abstract": "We explore the use of reinforcement learning algorithms for dynamic portfolio allocation...",
+    "categories": ["q-fin.PR", "cs.LG"],
+    "pdf_url": "https://arxiv.org/pdf/2508.99999.pdf",
+    "published_at": "2026-09-05T15:00:00+00:00"
+  }
+]
