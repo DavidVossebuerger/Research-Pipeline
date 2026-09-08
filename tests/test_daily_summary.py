@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timezone
 from unittest.mock import patch
 
-from research_pipeline import db
-from research_pipeline.config import Config
-from research_pipeline import daily_summary
+import pytest
+
+from research_pipeline import daily_summary, db
 
 
 class MockConfig:
     """Mock config for testing."""
+
     db_path = None  # Will be set in fixtures
     feature_daily_summary_enabled = True
     llm_model = "test-model"
@@ -52,16 +51,31 @@ class TestBuildDailySummary:
         """build_daily_summary returns expected keys in result."""
         # Insert test papers
         _insert_paper(
-            conn, "2401.12345", "Test Paper 1", "2026-09-08T10:00:00",
-            abs_score=7.5, deep_score=8.5, picked=1
+            conn,
+            "2401.12345",
+            "Test Paper 1",
+            "2026-09-08T10:00:00",
+            abs_score=7.5,
+            deep_score=8.5,
+            picked=1,
         )
         _insert_paper(
-            conn, "2401.12346", "Test Paper 2", "2026-09-08T11:00:00",
-            abs_score=6.0, deep_score=7.0, picked=0
+            conn,
+            "2401.12346",
+            "Test Paper 2",
+            "2026-09-08T11:00:00",
+            abs_score=6.0,
+            deep_score=7.0,
+            picked=0,
         )
         _insert_paper(
-            conn, "2401.12347", "Test Paper 3", "2026-09-08T12:00:00",
-            abs_score=5.0, deep_score=None, picked=0
+            conn,
+            "2401.12347",
+            "Test Paper 3",
+            "2026-09-08T12:00:00",
+            abs_score=5.0,
+            deep_score=None,
+            picked=0,
         )
 
         # Patch the connection to return our test conn
@@ -79,12 +93,15 @@ class TestBuildDailySummary:
     def test_filters_to_deep_scored_only(self, conn, mock_cfg):
         """build_daily_summary only includes papers with deep_score."""
         _insert_paper(
-            conn, "2401.12345", "Scored Paper", "2026-09-08T10:00:00",
-            abs_score=7.0, deep_score=8.0
+            conn, "2401.12345", "Scored Paper", "2026-09-08T10:00:00", abs_score=7.0, deep_score=8.0
         )
         _insert_paper(
-            conn, "2401.12346", "Unscored Paper", "2026-09-08T11:00:00",
-            abs_score=6.0, deep_score=None
+            conn,
+            "2401.12346",
+            "Unscored Paper",
+            "2026-09-08T11:00:00",
+            abs_score=6.0,
+            deep_score=None,
         )
 
         with patch("research_pipeline.daily_summary.db.get_connection", return_value=conn):
@@ -95,12 +112,22 @@ class TestBuildDailySummary:
     def test_computes_stats_correctly(self, conn, mock_cfg):
         """build_daily_summary computes aggregate stats."""
         _insert_paper(
-            conn, "2401.12345", "Paper 1", "2026-09-08T10:00:00",
-            abs_score=7.0, deep_score=8.0, picked=1
+            conn,
+            "2401.12345",
+            "Paper 1",
+            "2026-09-08T10:00:00",
+            abs_score=7.0,
+            deep_score=8.0,
+            picked=1,
         )
         _insert_paper(
-            conn, "2401.12346", "Paper 2", "2026-09-08T11:00:00",
-            abs_score=9.0, deep_score=9.0, picked=0
+            conn,
+            "2401.12346",
+            "Paper 2",
+            "2026-09-08T11:00:00",
+            abs_score=9.0,
+            deep_score=9.0,
+            picked=0,
         )
 
         with patch("research_pipeline.daily_summary.db.get_connection", return_value=conn):
@@ -117,13 +144,14 @@ class TestSendDailySummary:
     def test_calls_notify_send_daily_summary(self, conn, mock_cfg):
         """send_daily_summary calls notify.send_daily_summary with formatted text."""
         _insert_paper(
-            conn, "2401.12345", "Test Paper", "2026-09-08T10:00:00",
-            abs_score=7.0, deep_score=8.0
+            conn, "2401.12345", "Test Paper", "2026-09-08T10:00:00", abs_score=7.0, deep_score=8.0
         )
 
-        with patch("research_pipeline.daily_summary.db.get_connection", return_value=conn), \
-             patch("research_pipeline.daily_summary.notify") as mock_notify, \
-             patch("research_pipeline.daily_summary.narrative_review") as mock_narrative:
+        with (
+            patch("research_pipeline.daily_summary.db.get_connection", return_value=conn),
+            patch("research_pipeline.daily_summary.notify") as mock_notify,
+            patch("research_pipeline.daily_summary.narrative_review") as mock_narrative,
+        ):
             mock_notify.send_daily_summary.return_value = True
             mock_narrative.generate_narrative.return_value = "Test narrative"
 
@@ -147,13 +175,14 @@ class TestSendDailySummary:
     def test_returns_false_when_notify_fails(self, conn, mock_cfg):
         """send_daily_summary returns False when notify fails."""
         _insert_paper(
-            conn, "2401.12345", "Test Paper", "2026-09-08T10:00:00",
-            abs_score=7.0, deep_score=8.0
+            conn, "2401.12345", "Test Paper", "2026-09-08T10:00:00", abs_score=7.0, deep_score=8.0
         )
 
-        with patch("research_pipeline.daily_summary.db.get_connection", return_value=conn), \
-             patch("research_pipeline.daily_summary.notify") as mock_notify, \
-             patch("research_pipeline.daily_summary.narrative_review") as mock_narrative:
+        with (
+            patch("research_pipeline.daily_summary.db.get_connection", return_value=conn),
+            patch("research_pipeline.daily_summary.notify") as mock_notify,
+            patch("research_pipeline.daily_summary.narrative_review") as mock_narrative,
+        ):
             mock_notify.send_daily_summary.return_value = False
             mock_narrative.generate_narrative.return_value = "Narrative"
 

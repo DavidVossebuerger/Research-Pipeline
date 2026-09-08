@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from . import db, narrative_review, notify
 from .config import Config
-from . import db, notify, narrative_review
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ def _iso_week_to_dates(week_str: str) -> tuple[str, str]:
 
     # Use isocalendar: find the first Thursday of the ISO year, then go back to Monday
     # January 4 is always in ISO week 1
-    jan4 = datetime(year, 1, 4)
+    jan4 = datetime(year, 1, 4)  # noqa: DTZ001
     # Thursday is 3 days after Monday (weekday() returns 0=Monday, 6=Sunday)
     # Find the Thursday of week 1
     thursday_of_week1 = jan4 + timedelta(days=(3 - jan4.weekday()) % 7)
@@ -81,7 +81,7 @@ def build_weekly_digest(week_str: str, cfg: Config) -> dict[str, Any]:
             if pub_at:
                 try:
                     # Parse date from ISO string
-                    pub_date = datetime.fromisoformat(pub_at.replace("Z", "+00:00"))
+                    pub_date = datetime.fromisoformat(pub_at)
                     date_str = pub_date.strftime("%Y-%m-%d")
                 except (ValueError, TypeError):
                     date_str = "unknown"
@@ -93,22 +93,17 @@ def build_weekly_digest(week_str: str, cfg: Config) -> dict[str, Any]:
             days[date_str].append(p)
 
         # Sort each day by deep_score DESC
-        for date_str in days:
-            days[date_str].sort(
-                key=lambda p: (p.get("deep_score") or 0, ""),
-                reverse=True
-            )
-            # Take top K per day
-            days[date_str] = days[date_str][: _TOP_PER_DAY]
+        for date_str, papers_list in days.items():
+            papers_list.sort(key=lambda p: (p.get("deep_score") or 0, ""), reverse=True)
+            # Take top K per day and update the dictionary
+            days[date_str] = papers_list[:_TOP_PER_DAY]
 
         # Compute top tags across all scored papers
         top_tags = _compute_top_tags(scored_papers)
 
         # Get top papers for the week
         all_sorted = sorted(
-            scored_papers,
-            key=lambda p: (p.get("deep_score") or 0, ""),
-            reverse=True
+            scored_papers, key=lambda p: (p.get("deep_score") or 0, ""), reverse=True
         )
         top_week_papers = all_sorted[:_TOP_PER_WEEK]
 
@@ -216,7 +211,7 @@ def run_weekly_digest_job(cfg: Config) -> dict[str, Any]:
     Returns:
         Result dict with week_str and success status
     """
-    today = datetime.now()
+    today = datetime.now(UTC)
     week_str = today.strftime("%Y-W%V")
     log.info("Running weekly digest job for %s", week_str)
 

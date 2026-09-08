@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from research_pipeline import autobuild
@@ -219,7 +217,7 @@ class TestLaunchAutobuild:
             "abstract": "Test abstract",
             "deep_summary": "Test summary",
         }
-        result = autobuild.launch_autobuild("1234.56789", paper, cfg)
+        _result = autobuild.launch_autobuild("1234.56789", paper, cfg)
 
         # Verify record_ai_event was called
         mock_conn.execute.assert_called()

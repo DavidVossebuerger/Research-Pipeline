@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
 
 # Fixture path
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "arxiv_response.json"
@@ -20,10 +16,10 @@ class TestFetchRecent:
         """Test that ARXIV_FIXTURE_PATH loads the fixture."""
         monkeypatch.setenv("ARXIV_FIXTURE_PATH", str(FIXTURE_PATH))
 
-        from research_pipeline.fetch_arxiv import fetch_recent
-
         # Patch config to avoid needing real env vars
         from research_pipeline import config
+        from research_pipeline.fetch_arxiv import fetch_recent
+
         monkeypatch.setattr(config, "CFG", config.load_config())
 
         papers = fetch_recent()
@@ -43,6 +39,7 @@ class TestFetchRecent:
         monkeypatch.setenv("ARXIV_FIXTURE_PATH", str(FIXTURE_PATH))
 
         from research_pipeline import config
+
         monkeypatch.setattr(config, "CFG", config.load_config())
 
         from research_pipeline.fetch_arxiv import fetch_recent
@@ -64,6 +61,7 @@ class TestFetchRecent:
         monkeypatch.setenv("ARXIV_FIXTURE_PATH", str(FIXTURE_PATH))
 
         from research_pipeline import config
+
         monkeypatch.setattr(config, "CFG", config.load_config())
 
         from research_pipeline.fetch_arxiv import fetch_recent
@@ -90,14 +88,14 @@ class TestLoadFixture:
         # With 20h lookback, only recent papers should be included
         papers = _load_fixture(FIXTURE_PATH, lookback_hours=20)
         # Only papers published after (now - 20h) should be included
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for p in papers:
             pub_str = p.get("published_at", "")
             if pub_str:
-                pub = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                pub = datetime.fromisoformat(pub_str)
                 if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
+                    pub = pub.replace(tzinfo=UTC)
                 # Should be within lookback window
                 assert (now - pub).total_seconds() / 3600 <= 20
 

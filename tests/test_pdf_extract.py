@@ -65,6 +65,7 @@ class TestPdfExtractionWithReportLab:
     def test_extracts_text_from_pdf(self, tmp_path):
         """Test text extraction from a PDF with actual content."""
         from io import BytesIO
+
         from reportlab.pdfgen import canvas
 
         pdf_path = tmp_path / "test.pdf"
@@ -86,6 +87,7 @@ class TestPdfExtractionWithReportLab:
     def test_limits_char_count(self, tmp_path):
         """Test that extract_first_n_chars limits to n characters."""
         from io import BytesIO
+
         from reportlab.pdfgen import canvas
 
         pdf_path = tmp_path / "test.pdf"
@@ -105,6 +107,7 @@ class TestPdfExtractionWithReportLab:
     def test_max_pages_limit(self, tmp_path):
         """Test extraction with max_pages limit."""
         from io import BytesIO
+
         from reportlab.pdfgen import canvas
 
         pdf_path = tmp_path / "multipage.pdf"

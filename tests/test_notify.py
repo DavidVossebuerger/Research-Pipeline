@@ -1,9 +1,8 @@
 """Tests for notify.py — Telegram-only notifications."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Mock httpx before importing the module under test
 import research_pipeline.notify as notify_module

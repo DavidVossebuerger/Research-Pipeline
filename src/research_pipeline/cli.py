@@ -1,4 +1,5 @@
 """Thin CLI entry point for research-pipeline command."""
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,8 @@ def cli():
 def run(dry_run: bool, lookback_hours: int | None, max_papers: int | None, json_output: bool):
     """Trigger a single pipeline run."""
     # Ensure config is loaded
-    cfg = load_config()
-    logger = setup_logging("research_pipeline")
+    load_config()
+    setup_logging("research_pipeline")
 
     result = runner.run_pipeline(
         dry_run=dry_run,
@@ -36,7 +37,9 @@ def run(dry_run: bool, lookback_hours: int | None, max_papers: int | None, json_
     if json_output:
         click.echo(json.dumps(result))
     else:
-        click.echo(f"Pipeline run complete: {result['papers_seen']} seen, {result['papers_picked']} picked")
+        click.echo(
+            f"Pipeline run complete: {result['papers_seen']} seen, {result['papers_picked']} picked"
+        )
         if result["errors"]:
             click.echo(f"Errors: {result['errors']}")
 

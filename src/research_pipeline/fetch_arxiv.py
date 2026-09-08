@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +25,8 @@ def _to_iso(dt: datetime | None) -> str:
     if dt is None:
         return ""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
 
 
 def _result_to_paper(r: arxiv.Result) -> dict[str, Any]:
@@ -65,7 +65,7 @@ def fetch_recent(
         return _load_fixture(Path(fixture), lookback_hours or cfg.arxiv_lookback_hours)
 
     lookback = lookback_hours or cfg.arxiv_lookback_hours
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback)
+    cutoff = datetime.now(UTC) - timedelta(hours=lookback)
     cutoff_str = cutoff.strftime("%Y%m%d%H%M")
 
     # Get rate limit from env var, default to 3.0 seconds
@@ -94,20 +94,22 @@ def fetch_recent(
 def _load_fixture(path: Path, lookback_hours: int) -> list[dict[str, Any]]:
     """Load a local JSON fixture, filter by lookback. Fixture is list of dicts."""
     raw = json.loads(path.read_text(encoding="utf-8"))
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=lookback_hours)
     out: list[dict[str, Any]] = []
     for p in raw:
         pub_str = p.get("published_at") or ""
         try:
-            pub = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+            pub = datetime.fromisoformat(pub_str)
         except ValueError:
             out.append(p)
             continue
         if pub.tzinfo is None:
-            pub = pub.replace(tzinfo=timezone.utc)
+            pub = pub.replace(tzinfo=UTC)
         if pub >= cutoff:
             out.append(p)
-    log.info("Fixture %s: %d papers, %d within %dh window", path.name, len(raw), len(out), lookback_hours)
+    log.info(
+        "Fixture %s: %d papers, %d within %dh window", path.name, len(raw), len(out), lookback_hours
+    )
     return out
 
 
@@ -155,7 +157,7 @@ def download_pdf(arxiv_id: str, pdf_url: str, cfg: Config) -> Path | None:
     except httpx.HTTPStatusError as e:
         log.error("Failed to download %s: HTTP %s", arxiv_id, e.response.status_code)
         return None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         log.error("Failed to download %s: %s", arxiv_id, e)
         return None
     finally:

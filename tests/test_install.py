@@ -1,4 +1,5 @@
 """Tests for install CLI."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -89,7 +90,7 @@ class TestConfigGetSet:
     def test_read_env_file_quoted_values(self, tmp_path):
         """Test reading .env with quoted values."""
         env_file = tmp_path / ".env"
-        env_file.write_text('FOO="bar baz"\nBAZ=\'qux\'\n')
+        env_file.write_text("FOO=\"bar baz\"\nBAZ='qux'\n")
 
         env = read_env_file(env_file)
         assert env == {"FOO": "bar baz", "BAZ": "qux"}
@@ -102,35 +103,51 @@ class TestDoctorExitCodes:
         """Mock Telegram getMe to return 401, assert exit 2."""
         # Mock Telegram to return failure
         import research_pipeline.install.telegram as tg_module
-        monkeypatch.setattr(tg_module, "get_telegram_status", lambda: MagicMock(
-            token_valid=False,
-            bot_username=None,
-            chat_valid=False,
-            chat_id=None,
-            error="Unauthorized",
-        ))
+
+        monkeypatch.setattr(
+            tg_module,
+            "get_telegram_status",
+            lambda: MagicMock(
+                token_valid=False,
+                bot_username=None,
+                chat_valid=False,
+                chat_id=None,
+                error="Unauthorized",
+            ),
+        )
 
         # Mock Ollama
         import research_pipeline.install.ollama as ollama_module
-        monkeypatch.setattr(ollama_module, "get_ollama_status", lambda: MagicMock(
-            installed=True,
-            version="0.1.0",
-            model_installed=True,
-            model_name="phi3.5:3.8b",
-            base_url="http://localhost:11434",
-        ))
+
+        monkeypatch.setattr(
+            ollama_module,
+            "get_ollama_status",
+            lambda: MagicMock(
+                installed=True,
+                version="0.1.0",
+                model_installed=True,
+                model_name="phi3.5:3.8b",
+                base_url="http://localhost:11434",
+            ),
+        )
 
         # Mock Cron
         import research_pipeline.install.cron as cron_module
-        monkeypatch.setattr(cron_module, "get_cron_entry", lambda: MagicMock(
-            installed=True,
-            schedule="30 07 * * *",
-            command="some command",
-            error=None,
-        ))
+
+        monkeypatch.setattr(
+            cron_module,
+            "get_cron_entry",
+            lambda: MagicMock(
+                installed=True,
+                schedule="30 07 * * *",
+                command="some command",
+                error=None,
+            ),
+        )
 
         # Mock log file
         import research_pipeline.config as config_module
+
         mock_cfg = MagicMock()
         mock_cfg.log_dir = MagicMock()
         mock_cfg.log_dir.exists.return_value = False
@@ -143,35 +160,51 @@ class TestDoctorExitCodes:
         """Mock everything green."""
         # Mock Telegram
         import research_pipeline.install.telegram as tg_module
-        monkeypatch.setattr(tg_module, "get_telegram_status", lambda: MagicMock(
-            token_valid=True,
-            bot_username="test_bot",
-            chat_valid=True,
-            chat_id="123456",
-            error=None,
-        ))
+
+        monkeypatch.setattr(
+            tg_module,
+            "get_telegram_status",
+            lambda: MagicMock(
+                token_valid=True,
+                bot_username="test_bot",
+                chat_valid=True,
+                chat_id="123456",
+                error=None,
+            ),
+        )
 
         # Mock Ollama
         import research_pipeline.install.ollama as ollama_module
-        monkeypatch.setattr(ollama_module, "get_ollama_status", lambda: MagicMock(
-            installed=True,
-            version="0.1.0",
-            model_installed=True,
-            model_name="phi3.5:3.8b",
-            base_url="http://localhost:11434",
-        ))
+
+        monkeypatch.setattr(
+            ollama_module,
+            "get_ollama_status",
+            lambda: MagicMock(
+                installed=True,
+                version="0.1.0",
+                model_installed=True,
+                model_name="phi3.5:3.8b",
+                base_url="http://localhost:11434",
+            ),
+        )
 
         # Mock Cron
         import research_pipeline.install.cron as cron_module
-        monkeypatch.setattr(cron_module, "get_cron_entry", lambda: MagicMock(
-            installed=True,
-            schedule="30 07 * * *",
-            command="some command",
-            error=None,
-        ))
+
+        monkeypatch.setattr(
+            cron_module,
+            "get_cron_entry",
+            lambda: MagicMock(
+                installed=True,
+                schedule="30 07 * * *",
+                command="some command",
+                error=None,
+            ),
+        )
 
         # Mock log dir
         import research_pipeline.config as config_module
+
         mock_log_dir = MagicMock()
         mock_log_dir.exists.return_value = True
         mock_log_dir.__truediv__ = lambda self, x: MagicMock(exists=MagicMock(return_value=True))

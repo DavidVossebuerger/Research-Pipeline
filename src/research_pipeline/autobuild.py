@@ -10,14 +10,13 @@ This module provides the core AutoBuild functionality:
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from .config import Config, load_config
-from .db import get_connection, record_ai_event
 from .code_session import CodeSession
+from .config import Config
+from .db import get_connection, record_ai_event
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +84,7 @@ def prepare_goal(arxiv_id: str, paper: dict, mode: str, cfg: Config) -> Path:
         goal_content = f"""# Goal: Build a Python Backtest
 
 ## Paper
-- **Title**: {paper.get('title', 'N/A')}
+- **Title**: {paper.get("title", "N/A")}
 - **arXiv ID**: {arxiv_id}
 
 ## Task
@@ -104,7 +103,7 @@ Build a Python backtest using yfinance and CSV data. Save:
         goal_content = f"""# Goal: Write a German Markdown Article
 
 ## Paper
-- **Title**: {paper.get('title', 'N/A')}
+- **Title**: {paper.get("title", "N/A")}
 - **arXiv ID**: {arxiv_id}
 
 ## Task
@@ -153,9 +152,9 @@ def launch_autobuild(arxiv_id: str, paper: dict, cfg: Config) -> CodeSession | N
     context_content = f"""# Paper Context
 
 **arXiv ID**: {arxiv_id}
-**Title**: {paper.get('title', 'N/A')}
-**Abstract**: {paper.get('abstract', 'N/A')}
-**Deep Summary**: {paper.get('deep_summary', 'N/A')}
+**Title**: {paper.get("title", "N/A")}
+**Abstract**: {paper.get("abstract", "N/A")}
+**Deep Summary**: {paper.get("deep_summary", "N/A")}
 """
     (work_dir / "context.md").write_text(context_content, encoding="utf-8")
 
@@ -196,7 +195,7 @@ def launch_autobuild(arxiv_id: str, paper: dict, cfg: Config) -> CodeSession | N
             conn.commit()
         finally:
             conn.close()
-    except Exception as e:
+    except OSError as e:
         log.warning("Failed to record ai_event for %s: %s", arxiv_id, e)
 
     return session
@@ -245,12 +244,14 @@ def poll_autobuild_sessions(cfg: Config) -> list[dict[str, Any]]:
         else:
             last_lines = ""
 
-        results.append({
-            "arxiv_id": arxiv_id,
-            "status": status,
-            "last_lines": last_lines,
-            "return_code": return_code,
-        })
+        results.append(
+            {
+                "arxiv_id": arxiv_id,
+                "status": status,
+                "last_lines": last_lines,
+                "return_code": return_code,
+            }
+        )
 
     return results
 

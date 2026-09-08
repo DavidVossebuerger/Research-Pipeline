@@ -1,4 +1,5 @@
 """Cron helper functions for install CLI."""
+
 from __future__ import annotations
 
 import re
@@ -10,6 +11,7 @@ from research_pipeline.config import CFG
 
 class CronStatus(NamedTuple):
     """Status result from cron check."""
+
     installed: bool
     schedule: str | None
     command: str | None
@@ -29,6 +31,7 @@ def get_cron_entry() -> CronStatus:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -78,7 +81,7 @@ def get_cron_entry() -> CronStatus:
             command=None,
             error="crontab command not found",
         )
-    except Exception as e:
+    except OSError as e:
         return CronStatus(
             installed=False,
             schedule=None,
@@ -118,6 +121,7 @@ def install_cron_entry(python_path: str | None = None) -> tuple[bool, str | None
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
 
         current_lines = []
@@ -138,13 +142,14 @@ def install_cron_entry(python_path: str | None = None) -> tuple[bool, str | None
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
 
         if proc.returncode == 0:
             return True, None
         return False, proc.stderr
 
-    except Exception as e:
+    except OSError as e:
         return False, str(e)
 
 
@@ -161,6 +166,7 @@ def remove_cron_entry() -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
 
         if result.returncode != 0:
@@ -181,11 +187,12 @@ def remove_cron_entry() -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
 
         if proc.returncode == 0:
             return True, None
         return False, proc.stderr
 
-    except Exception as e:
+    except OSError as e:
         return False, str(e)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -101,7 +101,7 @@ def upsert_paper(conn: sqlite3.Connection, paper: dict[str, Any]) -> None:
             "categories": ",".join(paper.get("categories", [])),
             "pdf_url": paper.get("pdf_url", ""),
             "published_at": paper.get("published_at", ""),
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "fetched_at": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -171,7 +171,7 @@ def mark_picked(conn: sqlite3.Connection, arxiv_id: str) -> None:
     """Mark a paper as picked."""
     conn.execute(
         "UPDATE papers SET picked = 1, notified_at = ? WHERE arxiv_id = ?",
-        (datetime.now(timezone.utc).isoformat(), arxiv_id),
+        (datetime.now(UTC).isoformat(), arxiv_id),
     )
 
 
@@ -179,7 +179,7 @@ def start_run(conn: sqlite3.Connection) -> int:
     """Start a new run. Returns the run id."""
     cursor = conn.execute(
         "INSERT INTO runs (started_at) VALUES (?)",
-        (datetime.now(timezone.utc).isoformat(),),
+        (datetime.now(UTC).isoformat(),),
     )
     return cursor.lastrowid
 
@@ -196,7 +196,7 @@ def finish_run(
     conn.execute(
         """UPDATE runs SET finished_at = ?, papers_seen = ?, papers_picked = ?, error = ?
            WHERE id = ?""",
-        (datetime.now(timezone.utc).isoformat(), papers_seen, papers_picked, error, run_id),
+        (datetime.now(UTC).isoformat(), papers_seen, papers_picked, error, run_id),
     )
 
 
@@ -215,7 +215,7 @@ def record_ai_event(
         """INSERT INTO ai_events (ts, source, event_type, arxiv_id, title, summary, metadata)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (
-            datetime.now(timezone.utc).isoformat(),
+            datetime.now(UTC).isoformat(),
             source,
             event_type,
             arxiv_id,
@@ -232,9 +232,7 @@ def migrate_add_deep_score_updated_at(conn: sqlite3.Connection) -> None:
         cursor = conn.execute("PRAGMA table_info(papers)")
         columns = {row[1] for row in cursor.fetchall()}
         if "deep_score_updated_at" not in columns:
-            conn.execute(
-                "ALTER TABLE papers ADD COLUMN deep_score_updated_at TIMESTAMP"
-            )
+            conn.execute("ALTER TABLE papers ADD COLUMN deep_score_updated_at TIMESTAMP")
             log.info("Added deep_score_updated_at column to papers table")
     except sqlite3.OperationalError:
         pass
@@ -277,7 +275,7 @@ def update_deep_score(
     result: dict[str, Any],
 ) -> None:
     """Update deep scoring results for a paper. Also stamps deep_score_updated_at."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """UPDATE papers
            SET deep_score = ?,
@@ -325,7 +323,7 @@ def list_papers_for_stage_b(
 
     Skips papers that already have a recent deep_score (within 1 day).
     """
-    one_day_ago = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    one_day_ago = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     rows = conn.execute(
         """SELECT * FROM papers
            WHERE published_at >= ?

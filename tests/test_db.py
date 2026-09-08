@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 
 import pytest
-import sqlite3
 
 from research_pipeline.db import (
-    get_connection,
-    init_schema,
-    upsert_paper,
-    get_paper,
-    list_unscored_papers,
-    list_top_deep_scored,
-    mark_picked,
-    start_run,
     finish_run,
+    get_connection,
+    get_paper,
+    init_schema,
+    list_top_deep_scored,
+    list_unscored_papers,
+    mark_picked,
     record_ai_event,
+    start_run,
+    upsert_paper,
 )
 
 
@@ -38,9 +37,7 @@ class TestSchemaInit:
         # Run init_schema again - should not raise
         init_schema(conn)
         # Verify tables exist
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = {t[0] for t in tables}
         assert "papers" in table_names
         assert "runs" in table_names
@@ -115,7 +112,7 @@ class TestListUnscoredPapers:
             ("2401.00002", "Paper 2", 8.5),
         )
 
-        since = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2024, 1, 1, tzinfo=UTC)
         results = list_unscored_papers(conn, since, limit=10)
 
         assert len(results) == 1
@@ -134,7 +131,7 @@ class TestListUnscoredPapers:
             ("2401.00002", "High Score", 8.0),
         )
 
-        since = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2024, 1, 1, tzinfo=UTC)
         results = list_unscored_papers(conn, since, limit=10)
 
         assert len(results) == 2
@@ -158,7 +155,7 @@ class TestListTopDeepScored:
             ("2401.00002", "Unpicked Paper", 8.0),
         )
 
-        since = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2024, 1, 1, tzinfo=UTC)
         results = list_top_deep_scored(conn, top_k=10, since=since)
 
         assert len(results) == 1
@@ -177,7 +174,7 @@ class TestListTopDeepScored:
             ("2401.00002", "High Deep", 9.0),
         )
 
-        since = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2024, 1, 1, tzinfo=UTC)
         results = list_top_deep_scored(conn, top_k=10, since=since)
 
         assert len(results) == 2

@@ -1,4 +1,5 @@
 """Logging setup for research pipeline."""
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +24,7 @@ def setup_logging(name: str = "research_pipeline") -> logging.Logger:
     log_file = log_dir / "pipeline.log"
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
-    file_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(file_formatter)
 
     # Console handler

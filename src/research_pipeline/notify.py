@@ -8,6 +8,7 @@ This module provides Telegram notification functions for sending:
 Fail-open: if Telegram is not configured, logs a warning and returns False.
 The caller should never need to wrap in try/except.
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,7 +50,7 @@ def _send_telegram_message(
     except httpx.TimeoutException:
         log.error("Telegram request timed out")
         return False
-    except Exception as e:
+    except httpx.HTTPError as e:
         log.error("Telegram send exception: %s", e)
         return False
 

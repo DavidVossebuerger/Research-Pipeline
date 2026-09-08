@@ -183,7 +183,8 @@ def score_abstract(paper: dict, *, cfg: Config) -> dict:
             temperature=0.2,
             max_tokens=400,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Catch all failures to ensure one paper's scoring failure doesn't stop the pipeline
         log.warning("Abstract scoring failed: %s", e)
         return {"score": 0.0, "tags": [], "reason": "api_error"}
 
@@ -238,7 +239,8 @@ def score_deep(paper: dict, pdf_text: str, *, cfg: Config) -> dict:
             temperature=0.2,
             max_tokens=2500,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Catch all failures to ensure one paper's scoring failure doesn't stop the pipeline
         log.warning("Deep scoring failed: %s", e)
         return _zero_deep_result("api_error")
 

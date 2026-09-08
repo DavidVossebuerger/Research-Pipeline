@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+from . import db, narrative_review, notify
 from .config import Config
-from . import db, notify, narrative_review
 
 log = logging.getLogger(__name__)
 
@@ -62,11 +62,13 @@ def build_daily_summary(date_str: str, cfg: Config) -> dict[str, Any]:
             "picked": len([p for p in papers if p.get("picked") == 1]),
             "avg_abs_score": (
                 sum(p["abs_score"] for p in all_with_abs) / len(all_with_abs)
-                if all_with_abs else 0.0
+                if all_with_abs
+                else 0.0
             ),
             "avg_deep_score": (
                 sum(p["deep_score"] for p in all_with_deep) / len(all_with_deep)
-                if all_with_deep else 0.0
+                if all_with_deep
+                else 0.0
             ),
             "top_categories": _compute_top_categories(scored_papers),
         }
@@ -134,11 +136,11 @@ def send_daily_summary(date_str: str, cfg: Config) -> bool:
     lines.append(f"- Papers gescort: {stats['papers_seen']}")
     lines.append(f"- Deep-gescort: {summary['n_papers']}")
     lines.append(f"- Gepickt: {stats['picked']}")
-    if stats['avg_abs_score'] > 0:
+    if stats["avg_abs_score"] > 0:
         lines.append(f"- Avg abs_score: {stats['avg_abs_score']:.1f}")
-    if stats['avg_deep_score'] > 0:
+    if stats["avg_deep_score"] > 0:
         lines.append(f"- Avg deep_score: {stats['avg_deep_score']:.1f}")
-    if stats['top_categories']:
+    if stats["top_categories"]:
         lines.append(f"- Top cats: {', '.join(stats['top_categories'])}")
     lines.append("")
 
@@ -172,7 +174,7 @@ def run_daily_summary_job(cfg: Config) -> dict[str, Any]:
     Returns:
         Result dict with date_str and success status
     """
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     log.info("Running daily summary job for %s", today)
 
     success = send_daily_summary(today, cfg)

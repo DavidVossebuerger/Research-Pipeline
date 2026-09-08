@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from research_pipeline import narrative_review
-from research_pipeline.config import Config
 
 
 class MockConfig:
     """Mock config for testing."""
+
     llm_model = "test-model"
     llm_base_url = "http://localhost:11434"
     llm_api_key = ""
@@ -136,7 +137,7 @@ class TestGenerateWeeklyNarrative:
         with patch("research_pipeline.narrative_review.score._chat") as mock_chat:
             mock_chat.return_value = "Narrative"
 
-            result = narrative_review.generate_weekly_narrative(papers_by_day, mock_cfg)
+            _result = narrative_review.generate_weekly_narrative(papers_by_day, mock_cfg)
 
             # Should call the LLM (empty days are filtered)
             assert mock_chat.called

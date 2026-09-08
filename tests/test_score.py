@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -84,12 +84,12 @@ class TestScoreAbstract:
         paper = {"title": "Test", "abstract": "Test abstract"}
 
         fake_response = {
-            "message": {
-                "content": "```json\n{\"score\": 15, \"tags\": [\"ml\"], \"reason\": \"High\"}\n```"
-            }
+            "message": {"content": '```json\n{"score": 15, "tags": ["ml"], "reason": "High"}\n```'}
         }
 
-        with patch.object(score_module, "_chat_ollama", return_value=fake_response["message"]["content"]):
+        with patch.object(
+            score_module, "_chat_ollama", return_value=fake_response["message"]["content"]
+        ):
             result = score_module.score_abstract(paper, cfg=mock_config)
 
         assert result["score"] == 10.0  # clamped from 15
@@ -149,17 +149,19 @@ class TestScoreDeep:
         paper = {"title": "Test", "abstract": "Test abstract"}
         pdf_text = "Full paper text here..."
 
-        fake_response = json.dumps({
-            "overall_score": 12,
-            "novelty": 8,
-            "rigor": 7,
-            "reproducibility": 6,
-            "practical_value": 9,
-            "summary": "Test summary",
-            "why_interesting": "Interesting for trading",
-            "tags": ["ml", "alpha"],
-            "analysis": "Detailed analysis"
-        })
+        fake_response = json.dumps(
+            {
+                "overall_score": 12,
+                "novelty": 8,
+                "rigor": 7,
+                "reproducibility": 6,
+                "practical_value": 9,
+                "summary": "Test summary",
+                "why_interesting": "Interesting for trading",
+                "tags": ["ml", "alpha"],
+                "analysis": "Detailed analysis",
+            }
+        )
 
         with patch.object(score_module, "_chat_ollama", return_value=fake_response):
             result = score_module.score_deep(paper, pdf_text, cfg=mock_config)
