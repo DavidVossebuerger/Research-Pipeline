@@ -45,7 +45,7 @@ def _env_list(key: str, default: list[str]) -> list[str]:
 @dataclass(frozen=True)
 class Config:
     # LLM
-    llm_provider: str  # "ollama" | "openrouter"
+    llm_provider: str  # "ollama" | "openai_compat" | "anthropic_compat"
     llm_model: str
     llm_base_url: str
     llm_api_key: str  # empty for ollama

@@ -1,4 +1,4 @@
-"""Two-stage scoring with Ollama and OpenRouter support."""
+"""Two-stage scoring with Ollama, OpenAI-compat, and Anthropic-compat support."""
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ from typing import Any
 import httpx
 
 from .config import Config
+
+# Anthropic API version header (hardcoded per spec)
+ANTHROPIC_VERSION = "2023-06-01"
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +67,7 @@ def _chat_openai_compat(
     max_tokens: int = 1024,
     timeout: int = 120,
 ) -> str:
-    """Call OpenAI-compatible API (e.g., OpenRouter)."""
+    """Call OpenAI-compatible API (e.g., OpenRouter, OpenAI direct, Together, Groq)."""
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Content-Type": "application/json",
@@ -84,6 +87,43 @@ def _chat_openai_compat(
         return data["choices"][0]["message"]["content"]
 
 
+def _chat_anthropic_compat(
+    messages: list[dict],
+    *,
+    model: str,
+    base_url: str,
+    api_key: str,
+    temperature: float = 0.2,
+    max_tokens: int = 1024,
+    timeout: int = 120,
+) -> str:
+    """Call an Anthropic-format /v1/messages endpoint.
+
+    Compatible with Anthropic direct and any provider that follows the Anthropic
+    Messages API schema (e.g., Anthropic direct, or any Anthropic-format proxy).
+    """
+    url = f"{base_url.rstrip('/')}/v1/messages"
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": ANTHROPIC_VERSION,
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    with httpx.Client(timeout=timeout) as client:
+        resp = client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        # Response shape: {"content": [{"type": "text", "text": "..."}, ...]}
+        content_blocks = data.get("content") or []
+        text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
+        return "".join(text_parts)
+
+
 def _chat(
     messages: list[dict],
     *,
@@ -93,10 +133,30 @@ def _chat(
     temperature: float = 0.2,
     max_tokens: int = 1024,
     timeout: int = 120,
+    provider: str = "ollama",
 ) -> str:
-    """Call the configured LLM provider. Returns the assistant message content."""
-    # Detect OpenRouter or other /v1 endpoints
-    if base_url.rstrip("/").endswith("/v1") or "openrouter" in base_url:
+    """Call the configured LLM provider. Returns the assistant message content.
+
+    Args:
+        messages: List of message dicts with 'role' and 'content'.
+        model: Model identifier.
+        base_url: Base URL for the API endpoint.
+        api_key: API key for authenticating with the provider.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens to generate.
+        timeout: Request timeout in seconds.
+        provider: Provider name - "ollama", "openai_compat", or "anthropic_compat".
+    """
+    if provider == "ollama":
+        return _chat_ollama(
+            messages,
+            model=model,
+            base_url=base_url,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
+    if provider == "openai_compat":
         return _chat_openai_compat(
             messages,
             model=model,
@@ -106,15 +166,17 @@ def _chat(
             max_tokens=max_tokens,
             timeout=timeout,
         )
-    # Default to Ollama
-    return _chat_ollama(
-        messages,
-        model=model,
-        base_url=base_url,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        timeout=timeout,
-    )
+    if provider == "anthropic_compat":
+        return _chat_anthropic_compat(
+            messages,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
+    raise ValueError(f"Unknown LLM_PROVIDER: {provider!r}")
 
 
 # ---------- JSON extraction ----------
@@ -182,6 +244,7 @@ def score_abstract(paper: dict, *, cfg: Config) -> dict:
             api_key=cfg.llm_api_key,
             temperature=0.2,
             max_tokens=400,
+            provider=cfg.llm_provider,
         )
     except Exception as e:  # noqa: BLE001
         # Catch all failures to ensure one paper's scoring failure doesn't stop the pipeline
@@ -238,6 +301,7 @@ def score_deep(paper: dict, pdf_text: str, *, cfg: Config) -> dict:
             api_key=cfg.llm_api_key,
             temperature=0.2,
             max_tokens=2500,
+            provider=cfg.llm_provider,
         )
     except Exception as e:  # noqa: BLE001
         # Catch all failures to ensure one paper's scoring failure doesn't stop the pipeline

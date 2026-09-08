@@ -21,6 +21,18 @@ research-pipeline run
 research-pipeline doctor
 ```
 
+## LLM Provider
+
+The pipeline supports three LLM backends:
+
+| Provider | Description | Example .env |
+|---|---|---|
+| `ollama` | Local, default | `LLM_PROVIDER=ollama` |
+| `openai_compat` | OpenAI, OpenRouter, Together, Groq, etc. | `LLM_PROVIDER=openai_compat` |
+| `anthropic_compat` | Anthropic direct, or any Anthropic-format API | `LLM_PROVIDER=anthropic_compat` |
+
+See [`docs/INSTALL.md`](docs/INSTALL.md#switching-llm-provider) for full configuration details.
+
 ## What it does
 
 ```

@@ -121,20 +121,42 @@ Make sure the venv is fully-qualified in cron — cron has a stripped
 
 ## Switching LLM provider
 
-The default is Ollama (local, no API key). To use OpenRouter or any other
-OpenAI-compatible endpoint:
+The pipeline supports three LLM backends:
+
+### Ollama (default)
 
 ```bash
-# .env
-LLM_PROVIDER=openrouter           # detection is by base_url suffix
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=anthropic/claude-3.5-sonnet
-LLM_API_KEY=sk-or-v1-...
+LLM_PROVIDER=ollama
+LLM_MODEL=phi3.5:3.8b
+LLM_BASE_URL=http://localhost:11434
+LLM_API_KEY=
 ```
 
-Any base URL ending in `/v1` (or containing `openrouter`) uses the
-OpenAI-compat path. Anything else uses Ollama. Add a new branch in
-`score.py:_chat()` if you need a different protocol.
+### OpenAI-compatible
+
+Use OpenAI direct, OpenRouter, Together, Groq, or any other OpenAI-compatible endpoint:
+
+```bash
+LLM_PROVIDER=openai_compat
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=sk-...
+```
+
+### Anthropic-compatible
+
+Use Anthropic direct, or any provider that speaks the Anthropic Messages API:
+
+```bash
+LLM_PROVIDER=anthropic_compat
+LLM_MODEL=claude-3-5-sonnet-20241022
+LLM_BASE_URL=https://api.anthropic.com
+LLM_API_KEY=sk-ant-...
+```
+
+The `anthropic_compat` option works with any provider that exposes an
+Anthropic-format `/v1/messages` endpoint — useful for proxies, local
+deployments, or alternative providers.
 
 ## Customizing the scoring prompts
 
