@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tempfile
 import time
 from importlib import reload
 from pathlib import Path
@@ -20,9 +21,34 @@ from research_pipeline.install import (
     telegram,
 )
 from research_pipeline.install import doctor as doctor_module
+from research_pipeline.install.remote import RemoteInstallError, SSHConnection
 from research_pipeline.logging_setup import setup_logging
 
 logger = setup_logging("research_pipeline.install")
+
+
+def get_setup_script_template() -> str:
+    """Load the setup script template."""
+    from importlib.resources import files
+
+    template_path = files("research_pipeline.install").joinpath("setup_script.sh.tmpl")
+    return template_path.read_text()
+
+
+def render_setup_script(
+    llm_model: str,
+    env_contents: str,
+    cron_minute: str,
+    cron_hour: str,
+) -> str:
+    """Render the setup script template with values."""
+    template = get_setup_script_template()
+    return (
+        template.replace("${LLM_MODEL}", llm_model)
+        .replace("${ENV_CONTENTS}", env_contents)
+        .replace("${CRON_MINUTE}", cron_minute)
+        .replace("${CRON_HOUR}", cron_hour)
+    )
 
 
 def get_env_path() -> Path:
@@ -88,20 +114,69 @@ def install(yes: bool):
     reload(config_module)
     cfg = config_module.CFG
 
-    # Step 1: Check Ollama
-    click.echo("[1/8] Checking Ollama...")
-    installed, version = ollama.check_ollama_installed()
-    if not installed:
-        click.echo("\nOllama is not installed.")
-        click.echo("Install command:")
-        click.echo("  curl -fsSL https://ollama.com/install.sh | sh")
-        click.echo("\nAfter installing, run this command again.")
-        sys.exit(1)
+    # Step 1: Install Target
+    click.echo("[1/9] Install Target")
+    if yes:
+        install_target = 1
+    else:
+        click.echo("  1) This device (default - install locally)")
+        click.echo("  2) Custom device (install on a remote server via SSH)")
+        install_target = click.prompt("Choice [1]", default=1, type=int)
 
-    click.echo(f"  ✓ Ollama installed: {version}")
+    ssh_conn: SSHConnection | None = None
+    remote_install = install_target == 2
 
-    # Step 2: LLM Provider selection
-    click.echo("\n[2/8] LLM Provider")
+    if remote_install:
+        # Collect SSH credentials
+        click.echo("\n[2/9] SSH Connection")
+        host = click.prompt("  Host (IP or hostname)")
+        user = click.prompt("  Username", default="root")
+        password = click.prompt("  Password", hide_input=True)
+        port = click.prompt("  Port", default=22, type=int)
+
+        ssh_conn = SSHConnection(host=host, user=user, password=password, port=port)
+
+        # Validate local requirements
+        click.echo("  Verifying sshpass is installed locally...")
+        try:
+            ssh_conn.check_local_requirements()
+            click.echo("  ✓ sshpass found")
+        except RemoteInstallError as e:
+            click.echo(f"  ✗ {e}")
+            sys.exit(1)
+
+        # Validate SSH connection
+        click.echo("  Testing SSH connection...")
+        ok, msg = ssh_conn.check_connection()
+        if not ok:
+            click.echo(f"  ✗ SSH connection failed: {msg}")
+            sys.exit(1)
+        click.echo("  ✓ SSH connection works")
+
+        # Validate Python on remote
+        click.echo("  Verifying Python 3.11+ on remote...")
+        python_version = ssh_conn.check_python()
+        if not python_version:
+            click.echo("  ✗ Python 3.11+ not found on remote")
+            sys.exit(1)
+        click.echo(f"  ✓ python {python_version} found")
+
+        # Skip local Ollama check for remote
+        click.echo("\n[3/9] LLM Provider (configured for remote)")
+    else:
+        # Step 2: Check Ollama (local only)
+        click.echo("[2/9] Checking Ollama...")
+        installed, version = ollama.check_ollama_installed()
+        if not installed:
+            click.echo("\nOllama is not installed.")
+            click.echo("Install command:")
+            click.echo("  curl -fsSL https://ollama.com/install.sh | sh")
+            click.echo("\nAfter installing, run this command again.")
+            sys.exit(1)
+
+        click.echo(f"  ✓ Ollama installed: {version}")
+
+        click.echo("\n[3/9] LLM Provider")
 
     # Determine default provider from existing env or config
     default_provider = existing_env.get("LLM_PROVIDER", cfg.llm_provider)
@@ -153,14 +228,14 @@ def install(yes: bool):
         model_installed = ollama.check_model_installed(model_name)
         if not model_installed:
             if yes:
-                click.echo(f"\n[3/8] Pulling model {model_name}...")
+                click.echo(f"\n[4/9] Pulling model {model_name}...")
                 result = ollama.pull_model(model_name)
                 if result.returncode != 0:
                     click.echo(f"  ✗ Failed to pull model: {result.stderr}")
                     sys.exit(1)
                 click.echo("  ✓ Model pulled")
             else:
-                click.echo(f"\n[3/8] Model {model_name} not installed.")
+                click.echo(f"\n[4/9] Model {model_name} not installed.")
                 if click.confirm(f"  Pull {model_name} now?", default=True):
                     click.echo("  Pulling model (this may take a few minutes)...")
                     result = ollama.pull_model(model_name)
@@ -176,7 +251,7 @@ def install(yes: bool):
 
     elif provider == "openai_compat":
         # OpenAI-compatible: prompt for URL, model, API key
-        click.echo("\n[3/8] OpenAI-compatible API")
+        click.echo("\n[4/9] OpenAI-compatible API")
 
         base_url = existing_env.get("LLM_BASE_URL", "https://api.openai.com/v1")
         if yes:
@@ -222,7 +297,7 @@ def install(yes: bool):
 
     else:  # anthropic_compat
         # Anthropic-compatible: prompt for URL, model, API key
-        click.echo("\n[3/8] Anthropic-compatible API")
+        click.echo("\n[4/9] Anthropic-compatible API")
 
         base_url = existing_env.get("LLM_BASE_URL", "https://api.anthropic.com")
         if not yes:
@@ -265,7 +340,7 @@ def install(yes: bool):
                 sys.exit(1)
 
     # Step 4: Telegram bot setup
-    click.echo("\n[4/8] Telegram Bot Setup")
+    click.echo("\n[5/9] Telegram Bot Setup")
 
     bot_token = existing_env.get("TELEGRAM_BOT_TOKEN", "")
     if yes and not bot_token:
@@ -318,7 +393,7 @@ def install(yes: bool):
                         click.echo(f"  ✗ Chat validation failed: {error}")
 
     # Step 5: Feature toggles
-    click.echo("\n[5/8] Feature Toggles")
+    click.echo("\n[6/9] Feature Toggles")
 
     if yes and "FEATURE_DAILY_SUMMARY_ENABLED" in existing_env:
         daily_enabled = existing_env["FEATURE_DAILY_SUMMARY_ENABLED"].lower() == "true"
@@ -348,7 +423,7 @@ def install(yes: bool):
         backfill_enabled = click.confirm("  Enable Backfill CLI?", default=False)
 
     # Step 6: Schedule
-    click.echo("\n[6/8] Schedule")
+    click.echo("\n[7/9] Schedule")
 
     if yes and "CRON_DAILY_TIME" in existing_env:
         schedule = existing_env["CRON_DAILY_TIME"]
@@ -361,7 +436,7 @@ def install(yes: bool):
         sys.exit(1)
 
     # Step 7: Write .env
-    click.echo("\n[7/8] Writing .env file...")
+    click.echo("\n[8/9] Writing .env file...")
 
     new_env = {
         "LLM_PROVIDER": provider,
@@ -408,20 +483,79 @@ def install(yes: bool):
         write_env_file(env_path, new_env)
         click.echo("  ✓ .env written")
 
-    # Step 8: Register cron
-    click.echo("\n[8/8] Registering cron...")
+    # Step 9: Register cron (or remote install)
+    if remote_install:
+        click.echo("\n[9/9] Running remote setup script...")
+        # Parse schedule for cron
+        schedule_parts = schedule.split(":")
+        cron_hour, cron_minute = schedule_parts[0], schedule_parts[1]
 
-    success, error = cron.install_cron_entry()
-    if success:
-        click.echo("  ✓ Cron entry installed")
+        # Build .env contents
+        env_lines = []
+        for key, value in new_env.items():
+            if " " in value:
+                env_lines.append(f'{key}="{value}"')
+            else:
+                env_lines.append(f"{key}={value}")
+        env_contents = "\n".join(env_lines)
+
+        # Render setup script
+        setup_script = render_setup_script(
+            llm_model=model_name,
+            env_contents=env_contents,
+            cron_minute=cron_minute,
+            cron_hour=cron_hour,
+        )
+
+        # Write to temp file and show preview
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp_script:
+            tmp_script.write(setup_script)
+            tmp_path = tmp_script.name
+
+        click.echo("  Setup script generated. First 20 lines:")
+        for i, line in enumerate(setup_script.splitlines()[:20]):
+            click.echo(f"    {line}")
+
+        # Upload and execute
+        click.echo(
+            "\n  → Streaming remote setup script (this may take several minutes for model pull)…"
+        )
+        try:
+            ssh_conn.upload_file(Path(tmp_path), "~/research-pipeline-setup.sh")
+            rc = ssh_conn.stream_command("bash ~/research-pipeline-setup.sh", timeout=1800)
+            if rc != 0:
+                click.echo(f"  ✗ Remote install failed with exit code {rc}")
+                sys.exit(1)
+            click.echo("  ✓ Remote install finished successfully")
+        except RemoteInstallError as e:
+            click.echo(f"  ✗ {e}")
+            sys.exit(1)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
     else:
-        click.echo(f"  ✗ Failed to install cron: {error}")
+        click.echo("\n[9/9] Registering cron...")
+        success, error = cron.install_cron_entry()
+        if success:
+            click.echo("  ✓ Cron entry installed")
+        else:
+            click.echo(f"  ✗ Failed to install cron: {error}")
 
     click.echo("\n=== Installation Complete ===")
-    click.echo("Next steps:")
-    click.echo("  - Run 'research-pipeline-install status' to check health")
-    click.echo("  - Run 'research-pipeline-install diagnose' for detailed tests")
-    click.echo("  - Run 'research-pipeline run' to test the pipeline")
+    click.echo("\nNext steps:")
+    if remote_install:
+        click.echo("  On the remote server:")
+        click.echo("    cd ~/research-pipeline")
+        click.echo("    .venv/bin/research-pipeline run --dry-run")
+    else:
+        click.echo("  Activate the virtualenv in your shell:")
+        click.echo("    bash/zsh:  source .venv/bin/activate")
+        click.echo("    fish:      source .venv/bin/activate.fish")
+        click.echo("  Then run:")
+        click.echo("    research-pipeline-install status")
+        click.echo("    research-pipeline-install diagnose")
+        click.echo("    research-pipeline run --dry-run")
+        click.echo("\n  Or run directly without activating:")
+        click.echo("    .venv/bin/research-pipeline run --dry-run")
 
 
 @cli.group()
