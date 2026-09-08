@@ -10,7 +10,9 @@ from importlib import reload
 from pathlib import Path
 
 import click
+import httpx
 
+from research_pipeline import score as score_module
 from research_pipeline.config import CFG
 from research_pipeline.install import (
     cron,
@@ -87,7 +89,7 @@ def install(yes: bool):
     cfg = config_module.CFG
 
     # Step 1: Check Ollama
-    click.echo("[1/7] Checking Ollama...")
+    click.echo("[1/8] Checking Ollama...")
     installed, version = ollama.check_ollama_installed()
     if not installed:
         click.echo("\nOllama is not installed.")
@@ -98,34 +100,172 @@ def install(yes: bool):
 
     click.echo(f"  ✓ Ollama installed: {version}")
 
-    # Step 2: Pull model
-    model_name = cfg.llm_model
-    if yes and "LLM_MODEL" in existing_env:
-        model_name = existing_env["LLM_MODEL"]
+    # Step 2: LLM Provider selection
+    click.echo("\n[2/8] LLM Provider")
 
-    model_installed = ollama.check_model_installed(model_name)
-    if not model_installed:
-        if yes:
-            click.echo(f"\n[2/7] Pulling model {model_name}...")
-            result = ollama.pull_model(model_name)
-            if result.returncode != 0:
-                click.echo(f"  ✗ Failed to pull model: {result.stderr}")
-                sys.exit(1)
-            click.echo("  ✓ Model pulled")
+    # Determine default provider from existing env or config
+    default_provider = existing_env.get("LLM_PROVIDER", cfg.llm_provider)
+
+    # Map to menu numbers for display
+    provider_map = {"1": "ollama", "2": "openai_compat", "3": "anthropic_compat"}
+
+    if yes:
+        # In --yes mode, use existing LLM_PROVIDER or default to Ollama
+        provider = default_provider
+        if provider in provider_map:
+            provider = provider_map[provider]
+    else:
+        click.echo("  1) Ollama (local, recommended for first install)")
+        click.echo("  2) Custom API — OpenAI-compatible")
+        click.echo("  3) Custom API — Anthropic-compatible")
+
+        # Determine default choice number
+        default_choice = "1"
+        if default_provider in provider_map:
+            default_choice = default_provider
+        elif default_provider in provider_map.values():
+            for k, v in provider_map.items():
+                if v == default_provider:
+                    default_choice = k
+                    break
+
+        prompt = f"Choice [{default_choice}]"
+        provider_choice = click.prompt(prompt, default=default_choice, type=int)
+
+        # Determine provider name
+        if provider_choice == 1 or provider_choice == "ollama":
+            provider = "ollama"
+        elif provider_choice == 2 or provider_choice == "openai_compat":
+            provider = "openai_compat"
+        elif provider_choice == 3 or provider_choice == "anthropic_compat":
+            provider = "anthropic_compat"
         else:
-            click.echo(f"\n[2/7] Model {model_name} not installed.")
-            if click.confirm(f"  Pull {model_name} now?", default=True):
-                click.echo("  Pulling model (this may take a few minutes)...")
+            click.echo("  ✗ Invalid choice. Using Ollama.")
+            provider = "ollama"
+
+    # Step 3: Provider-specific configuration
+    if provider == "ollama":
+        # Ollama: pull model
+        model_name = cfg.llm_model
+        if yes and "LLM_MODEL" in existing_env:
+            model_name = existing_env["LLM_MODEL"]
+
+        model_installed = ollama.check_model_installed(model_name)
+        if not model_installed:
+            if yes:
+                click.echo(f"\n[3/8] Pulling model {model_name}...")
                 result = ollama.pull_model(model_name)
                 if result.returncode != 0:
                     click.echo(f"  ✗ Failed to pull model: {result.stderr}")
                     sys.exit(1)
                 click.echo("  ✓ Model pulled")
-    else:
-        click.echo(f"  ✓ Model {model_name} already installed")
+            else:
+                click.echo(f"\n[3/8] Model {model_name} not installed.")
+                if click.confirm(f"  Pull {model_name} now?", default=True):
+                    click.echo("  Pulling model (this may take a few minutes)...")
+                    result = ollama.pull_model(model_name)
+                    if result.returncode != 0:
+                        click.echo(f"  ✗ Failed to pull model: {result.stderr}")
+                        sys.exit(1)
+                    click.echo("  ✓ Model pulled")
+        else:
+            click.echo(f"  ✓ Model {model_name} already installed")
 
-    # Step 3: Telegram bot setup
-    click.echo("\n[3/7] Telegram Bot Setup")
+        base_url = "http://localhost:11434"
+        api_key = ""
+
+    elif provider == "openai_compat":
+        # OpenAI-compatible: prompt for URL, model, API key
+        click.echo("\n[3/8] OpenAI-compatible API")
+
+        base_url = existing_env.get("LLM_BASE_URL", "https://api.openai.com/v1")
+        if yes:
+            pass  # use existing
+        else:
+            base_url = click.prompt(
+                "  Base URL (e.g. https://api.openai.com/v1)",
+                default=base_url,
+            )
+
+        model_name = existing_env.get("LLM_MODEL", "gpt-4o-mini")
+        if not yes:
+            model_name = click.prompt(
+                "  Model ID (e.g. gpt-4o-mini)",
+                default=model_name,
+            )
+
+        api_key = existing_env.get("LLM_API_KEY", "")
+        if not yes:
+            api_key = click.prompt("  API key", default=api_key, hide_input=True)
+
+        # Validate with test call
+        if not yes:
+            click.echo("  Validating with test call...")
+            try:
+                test_result = score_module._chat(
+                    [{"role": "user", "content": "Reply with OK"}],
+                    model=model_name,
+                    base_url=base_url,
+                    api_key=api_key,
+                    temperature=0.2,
+                    max_tokens=10,
+                    provider=provider,
+                )
+                if test_result and test_result.strip():
+                    click.echo("  ✓ Test call successful")
+                else:
+                    click.echo("  ✗ Test call returned empty response")
+                    sys.exit(1)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                click.echo(f"  ✗ Test call failed: {e}")
+                sys.exit(1)
+
+    else:  # anthropic_compat
+        # Anthropic-compatible: prompt for URL, model, API key
+        click.echo("\n[3/8] Anthropic-compatible API")
+
+        base_url = existing_env.get("LLM_BASE_URL", "https://api.anthropic.com")
+        if not yes:
+            base_url = click.prompt(
+                "  Base URL",
+                default=base_url,
+            )
+
+        model_name = existing_env.get("LLM_MODEL", "claude-3-5-sonnet-20241022")
+        if not yes:
+            model_name = click.prompt(
+                "  Model ID (e.g. claude-3-5-sonnet-20241022)",
+                default=model_name,
+            )
+
+        api_key = existing_env.get("LLM_API_KEY", "")
+        if not yes:
+            api_key = click.prompt("  API key", default=api_key, hide_input=True)
+
+        # Validate with test call
+        if not yes:
+            click.echo("  Validating with test call...")
+            try:
+                test_result = score_module._chat(
+                    [{"role": "user", "content": "Reply with OK"}],
+                    model=model_name,
+                    base_url=base_url,
+                    api_key=api_key,
+                    temperature=0.2,
+                    max_tokens=10,
+                    provider=provider,
+                )
+                if test_result and test_result.strip():
+                    click.echo("  ✓ Test call successful")
+                else:
+                    click.echo("  ✗ Test call returned empty response")
+                    sys.exit(1)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                click.echo(f"  ✗ Test call failed: {e}")
+                sys.exit(1)
+
+    # Step 4: Telegram bot setup
+    click.echo("\n[4/8] Telegram Bot Setup")
 
     bot_token = existing_env.get("TELEGRAM_BOT_TOKEN", "")
     if yes and not bot_token:
@@ -177,8 +317,8 @@ def install(yes: bool):
                     else:
                         click.echo(f"  ✗ Chat validation failed: {error}")
 
-    # Step 4: Feature toggles
-    click.echo("\n[4/7] Feature Toggles")
+    # Step 5: Feature toggles
+    click.echo("\n[5/8] Feature Toggles")
 
     if yes and "FEATURE_DAILY_SUMMARY_ENABLED" in existing_env:
         daily_enabled = existing_env["FEATURE_DAILY_SUMMARY_ENABLED"].lower() == "true"
@@ -207,8 +347,8 @@ def install(yes: bool):
     else:
         backfill_enabled = click.confirm("  Enable Backfill CLI?", default=False)
 
-    # Step 5: Schedule
-    click.echo("\n[5/7] Schedule")
+    # Step 6: Schedule
+    click.echo("\n[6/8] Schedule")
 
     if yes and "CRON_DAILY_TIME" in existing_env:
         schedule = existing_env["CRON_DAILY_TIME"]
@@ -220,14 +360,14 @@ def install(yes: bool):
         click.echo("  ✗ Invalid time format. Use HH:MM (e.g., 07:30)")
         sys.exit(1)
 
-    # Step 6: Write .env
-    click.echo("\n[6/7] Writing .env file...")
+    # Step 7: Write .env
+    click.echo("\n[7/8] Writing .env file...")
 
     new_env = {
-        "LLM_PROVIDER": cfg.llm_provider,
+        "LLM_PROVIDER": provider,
         "LLM_MODEL": model_name,
-        "LLM_BASE_URL": cfg.llm_base_url,
-        "LLM_API_KEY": cfg.llm_api_key,
+        "LLM_BASE_URL": base_url,
+        "LLM_API_KEY": api_key,
         "TELEGRAM_BOT_TOKEN": bot_token,
         "TELEGRAM_CHAT_ID": chat_id,
         "TELEGRAM_TOPIC_PICKS": existing_env.get("TELEGRAM_TOPIC_PICKS", ""),
@@ -268,8 +408,8 @@ def install(yes: bool):
         write_env_file(env_path, new_env)
         click.echo("  ✓ .env written")
 
-    # Step 7: Register cron
-    click.echo("\n[7/7] Registering cron...")
+    # Step 8: Register cron
+    click.echo("\n[8/8] Registering cron...")
 
     success, error = cron.install_cron_entry()
     if success:

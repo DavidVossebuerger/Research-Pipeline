@@ -52,7 +52,7 @@ opt-in feature-gated.
 | `db.py` | SQLite state (papers, runs, ai_events). Connection setup, schema init, CRUD, run lifecycle, AI event log |
 | `fetch_arxiv.py` | arXiv API client. `fetch_recent(lookback_hours)`, `download_pdf(arxiv_id, pdf_url)`. Fixture support via `ARXIV_FIXTURE_PATH` |
 | `pdf_extract.py` | pypdf wrapper. `extract_text(pdf_path)`, `extract_first_n_chars(pdf_path, n)` for Stage B |
-| `score.py` | Two-stage LLM scoring. `score_abstract(paper, cfg)`, `score_deep(paper, pdf_text, cfg)`. Ollama (default) and OpenRouter-compat |
+| `score.py` | Two-stage LLM scoring. `score_abstract(paper, cfg)`, `score_deep(paper, pdf_text, cfg)`. Supports Ollama, OpenAI-compat, and Anthropic-compat providers. |
 | `notify.py` | Telegram-only notifier. `send_top_picks`, `send_daily_summary`, `send_raw`. Topic-thread support, fail-open |
 | `runtime/runner.py` | Orchestrator wiring fetch → score → notify |
 | `daily_summary.py` | Feature-gated daily-summary build + send |

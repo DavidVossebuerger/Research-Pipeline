@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,6 +19,72 @@ def mock_config(tmp_path):
         llm_model="phi3.5:3.8b",
         llm_base_url="http://localhost:11434",
         llm_api_key="",
+        telegram_bot_token="",
+        telegram_chat_id="",
+        telegram_topic_picks="",
+        telegram_topic_summary="",
+        cron_daily_time="07:30",
+        cron_autobuild_poll="*/5",
+        feature_daily_summary_enabled=True,
+        feature_weekly_digest_enabled=False,
+        feature_autobuild_enabled=False,
+        feature_telegram_bot_enabled=False,
+        feature_backfill_enabled=False,
+        arxiv_categories=["cs.LG"],
+        arxiv_lookback_hours=26,
+        arxiv_max_results=200,
+        arxiv_fixture_path="",
+        score_stage_a_threshold=7.0,
+        score_stage_b_top_k=10,
+        notify_top_k=3,
+        db_path=tmp_path / "test.db",
+        pdf_dir=tmp_path / "pdfs",
+        log_dir=tmp_path / "logs",
+        autobuild_data_dir=tmp_path / "autobuild",
+    )
+
+
+@pytest.fixture
+def openai_compat_config(tmp_path):
+    """Create a mock Config for OpenAI-compat testing."""
+    return Config(
+        llm_provider="openai_compat",
+        llm_model="gpt-4o-mini",
+        llm_base_url="https://api.openai.com/v1",
+        llm_api_key="sk-test-key",
+        telegram_bot_token="",
+        telegram_chat_id="",
+        telegram_topic_picks="",
+        telegram_topic_summary="",
+        cron_daily_time="07:30",
+        cron_autobuild_poll="*/5",
+        feature_daily_summary_enabled=True,
+        feature_weekly_digest_enabled=False,
+        feature_autobuild_enabled=False,
+        feature_telegram_bot_enabled=False,
+        feature_backfill_enabled=False,
+        arxiv_categories=["cs.LG"],
+        arxiv_lookback_hours=26,
+        arxiv_max_results=200,
+        arxiv_fixture_path="",
+        score_stage_a_threshold=7.0,
+        score_stage_b_top_k=10,
+        notify_top_k=3,
+        db_path=tmp_path / "test.db",
+        pdf_dir=tmp_path / "pdfs",
+        log_dir=tmp_path / "logs",
+        autobuild_data_dir=tmp_path / "autobuild",
+    )
+
+
+@pytest.fixture
+def anthropic_compat_config(tmp_path):
+    """Create a mock Config for Anthropic-compat testing."""
+    return Config(
+        llm_provider="anthropic_compat",
+        llm_model="claude-3-5-sonnet-20241022",
+        llm_base_url="https://api.anthropic.com",
+        llm_api_key="sk-ant-test-key",
         telegram_bot_token="",
         telegram_chat_id="",
         telegram_topic_picks="",
@@ -239,3 +305,248 @@ class TestZeroDeepResult:
         assert result["why_interesting"] == ""
         assert result["tags"] == []
         assert result["analysis"] == "Scoring failed: api_error"
+
+
+class TestChatAnthropicCompat:
+    """Tests for _chat_anthropic_compat function."""
+
+    def test_calls_correct_url(self):
+        """_chat_anthropic_compat should call the correct /v1/messages URL."""
+        messages = [{"role": "user", "content": "Hello"}]
+        model = "claude-3-5-sonnet-20241022"
+        base_url = "https://api.anthropic.com"
+        api_key = "sk-ant-test-key"
+
+        with patch("httpx.Client") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"content": [{"type": "text", "text": "Hello back"}]}
+            mock_resp.raise_for_status = MagicMock()
+            mock_client.return_value.__enter__.return_value.post.return_value = mock_resp
+
+            score_module._chat_anthropic_compat(
+                messages,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+            )
+
+            # Verify URL is constructed correctly
+            mock_client.assert_called_once_with(timeout=120)
+
+    def test_includes_correct_headers(self):
+        """_chat_anthropic_compat should include correct headers."""
+        messages = [{"role": "user", "content": "Hello"}]
+        model = "claude-3-5-sonnet-20241022"
+        base_url = "https://api.anthropic.com"
+        api_key = "sk-ant-test-key"
+
+        with patch("httpx.Client") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"content": [{"type": "text", "text": "Hello back"}]}
+            mock_resp.raise_for_status = MagicMock()
+            mock_client.return_value.__enter__.return_value.post.return_value = mock_resp
+
+            score_module._chat_anthropic_compat(
+                messages,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+            )
+
+            call_args = mock_client.return_value.__enter__.return_value.post.call_args
+            headers = call_args[1]["headers"]
+            assert headers["x-api-key"] == api_key
+            assert headers["anthropic-version"] == score_module.ANTHROPIC_VERSION
+
+    def test_includes_correct_body(self):
+        """_chat_anthropic_compat should include correct body."""
+        messages = [{"role": "user", "content": "Hello"}]
+        model = "claude-3-5-sonnet-20241022"
+        base_url = "https://api.anthropic.com"
+        api_key = "sk-ant-test-key"
+
+        with patch("httpx.Client") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"content": [{"type": "text", "text": "Hello back"}]}
+            mock_resp.raise_for_status = MagicMock()
+            mock_client.return_value.__enter__.return_value.post.return_value = mock_resp
+
+            score_module._chat_anthropic_compat(
+                messages,
+                model=model,
+                base_url=base_url,
+                api_key=api_key,
+                temperature=0.5,
+                max_tokens=100,
+            )
+
+            call_args = mock_client.return_value.__enter__.return_value.post.call_args
+            body = call_args[1]["json"]
+            assert body["model"] == model
+            assert body["messages"] == messages
+            assert body["temperature"] == 0.5
+            assert body["max_tokens"] == 100
+
+    def test_extracts_single_content_block(self):
+        """_chat_anthropic_compat should extract text from single content block."""
+        messages = [{"role": "user", "content": "Hello"}]
+
+        with patch("httpx.Client") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {"content": [{"type": "text", "text": "Response text"}]}
+            mock_resp.raise_for_status = MagicMock()
+            mock_client.return_value.__enter__.return_value.post.return_value = mock_resp
+
+            result = score_module._chat_anthropic_compat(
+                messages,
+                model="test-model",
+                base_url="https://api.anthropic.com",
+                api_key="test-key",
+            )
+
+            assert result == "Response text"
+
+    def test_extracts_multiple_content_blocks(self):
+        """_chat_anthropic_compat should join text from multiple content blocks."""
+        messages = [{"role": "user", "content": "Hello"}]
+
+        with patch("httpx.Client") as mock_client:
+            mock_resp = MagicMock()
+            mock_resp.json.return_value = {
+                "content": [
+                    {"type": "text", "text": "Part1 "},
+                    {"type": "text", "text": "Part2"},
+                ]
+            }
+            mock_resp.raise_for_status = MagicMock()
+            mock_client.return_value.__enter__.return_value.post.return_value = mock_resp
+
+            result = score_module._chat_anthropic_compat(
+                messages,
+                model="test-model",
+                base_url="https://api.anthropic.com",
+                api_key="test-key",
+            )
+
+            assert result == "Part1 Part2"
+
+
+class TestChatDispatch:
+    """Tests for _chat dispatch function."""
+
+    def test_dispatches_to_ollama(self):
+        """_chat should dispatch to _chat_ollama for ollama provider."""
+        messages = [{"role": "user", "content": "test"}]
+
+        with patch.object(score_module, "_chat_ollama") as mock_ollama:
+            mock_ollama.return_value = "response"
+            result = score_module._chat(
+                messages,
+                model="phi3.5:3.8b",
+                base_url="http://localhost:11434",
+                provider="ollama",
+            )
+
+            mock_ollama.assert_called_once()
+            assert result == "response"
+
+    def test_dispatches_to_openai_compat(self):
+        """_chat should dispatch to _chat_openai_compat for openai_compat provider."""
+        messages = [{"role": "user", "content": "test"}]
+
+        with patch.object(score_module, "_chat_openai_compat") as mock_openai:
+            mock_openai.return_value = "response"
+            result = score_module._chat(
+                messages,
+                model="gpt-4o-mini",
+                base_url="https://api.openai.com/v1",
+                api_key="sk-test",
+                provider="openai_compat",
+            )
+
+            mock_openai.assert_called_once()
+            assert result == "response"
+
+    def test_dispatches_to_anthropic_compat(self):
+        """_chat should dispatch to _chat_anthropic_compat for anthropic_compat provider."""
+        messages = [{"role": "user", "content": "test"}]
+
+        with patch.object(score_module, "_chat_anthropic_compat") as mock_anthropic:
+            mock_anthropic.return_value = "response"
+            result = score_module._chat(
+                messages,
+                model="claude-3-5-sonnet-20241022",
+                base_url="https://api.anthropic.com",
+                api_key="sk-ant-test",
+                provider="anthropic_compat",
+            )
+
+            mock_anthropic.assert_called_once()
+            assert result == "response"
+
+    def test_raises_on_unknown_provider(self):
+        """_chat should raise ValueError for unknown provider."""
+        messages = [{"role": "user", "content": "test"}]
+
+        with pytest.raises(ValueError, match="Unknown LLM_PROVIDER"):
+            score_module._chat(
+                messages,
+                model="test-model",
+                base_url="http://localhost:11434",
+                provider="unknown_provider",
+            )
+
+
+class TestScoreWithProviders:
+    """Tests for score_abstract and score_deep with different providers."""
+
+    def test_score_abstract_uses_provider_from_config(self, openai_compat_config):
+        """score_abstract should pass provider from config to _chat."""
+        paper = {"title": "Test", "abstract": "Test abstract"}
+
+        with patch.object(score_module, "_chat") as mock_chat:
+            mock_chat.return_value = '{"score": 8, "tags": ["test"], "reason": "Good"}'
+            score_module.score_abstract(paper, cfg=openai_compat_config)
+
+            mock_chat.assert_called_once()
+            call_kwargs = mock_chat.call_args[1]
+            assert call_kwargs["provider"] == "openai_compat"
+
+    def test_score_deep_uses_provider_from_config(self, anthropic_compat_config):
+        """score_deep should pass provider from config to _chat."""
+        paper = {"title": "Test", "abstract": "Test abstract"}
+        pdf_text = "Full paper text..."
+
+        with patch.object(score_module, "_chat") as mock_chat:
+            mock_chat.return_value = '{"overall_score": 8, "novelty": 7, "rigor": 6, "reproducibility": 5, "practical_value": 7, "summary": "Sum", "why_interesting": "Why", "tags": [], "analysis": "A"}'
+            score_module.score_deep(paper, pdf_text, cfg=anthropic_compat_config)
+
+            mock_chat.assert_called_once()
+            call_kwargs = mock_chat.call_args[1]
+            assert call_kwargs["provider"] == "anthropic_compat"
+
+    def test_prompts_sent_as_single_user_message_ollama(self, mock_config):
+        """For ollama, prompts should be sent as a single user message."""
+        paper = {"title": "Test", "abstract": "Test abstract"}
+
+        with patch.object(score_module, "_chat") as mock_chat:
+            mock_chat.return_value = '{"score": 8, "tags": ["test"], "reason": "Good"}'
+            score_module.score_abstract(paper, cfg=mock_config)
+
+            call_messages = mock_chat.call_args[0][0]  # First positional arg
+            assert len(call_messages) == 1
+            assert call_messages[0]["role"] == "user"
+            # The prompt includes "Test" (title) and "Test abstract" in formatted content
+            assert "Test" in call_messages[0]["content"]
+
+    def test_prompts_sent_as_single_user_message_anthropic(self, anthropic_compat_config):
+        """For anthropic_compat, prompts should also be sent as a single user message."""
+        paper = {"title": "Test", "abstract": "Test abstract"}
+
+        with patch.object(score_module, "_chat") as mock_chat:
+            mock_chat.return_value = '{"score": 8, "tags": ["test"], "reason": "Good"}'
+            score_module.score_abstract(paper, cfg=anthropic_compat_config)
+
+            call_messages = mock_chat.call_args[0][0]  # First positional arg
+            assert len(call_messages) == 1
+            assert call_messages[0]["role"] == "user"
