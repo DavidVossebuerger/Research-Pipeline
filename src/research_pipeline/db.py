@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +44,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
             notified_at   TIMESTAMP,
             fetched_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             pdf_status    TEXT,
-            pdf_reason    TEXT
+            pdf_reason    TEXT,
+            deep_score_updated_at TIMESTAMP
         );
 
         CREATE INDEX IF NOT EXISTS idx_papers_published ON papers(published_at DESC);
@@ -225,6 +226,35 @@ def record_ai_event(
     )
 
 
+def migrate_add_deep_score_updated_at(conn: sqlite3.Connection) -> None:
+    """Add deep_score_updated_at column if it doesn't exist. Idempotent."""
+    try:
+        cursor = conn.execute("PRAGMA table_info(papers)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "deep_score_updated_at" not in columns:
+            conn.execute(
+                "ALTER TABLE papers ADD COLUMN deep_score_updated_at TIMESTAMP"
+            )
+            log.info("Added deep_score_updated_at column to papers table")
+    except sqlite3.OperationalError:
+        pass
+
+
+def set_abstract_score(
+    conn: sqlite3.Connection,
+    arxiv_id: str,
+    score: float,
+    reason: str,
+    tags: list[str],
+) -> None:
+    """Update abstract score for a paper (alias for update_abstract_score)."""
+    conn.execute(
+        """UPDATE papers SET abs_score = ?, abs_reason = ?, abs_tags = ?
+           WHERE arxiv_id = ?""",
+        (score, reason, json.dumps(tags), arxiv_id),
+    )
+
+
 def update_abstract_score(
     conn: sqlite3.Connection,
     arxiv_id: str,
@@ -246,20 +276,16 @@ def update_deep_score(
     arxiv_id: str,
     result: dict[str, Any],
 ) -> None:
-    """Update the deep scoring results for a paper.
-
-    Args:
-        conn: Database connection
-        arxiv_id: The paper's arXiv ID
-        result: Dict with keys: overall_score, summary, why_interesting, tags, analysis
-    """
+    """Update deep scoring results for a paper. Also stamps deep_score_updated_at."""
+    now = datetime.now(timezone.utc).isoformat()
     conn.execute(
         """UPDATE papers
            SET deep_score = ?,
                deep_summary = ?,
                deep_why = ?,
                deep_tags = ?,
-               deep_analysis = ?
+               deep_analysis = ?,
+               deep_score_updated_at = ?
            WHERE arxiv_id = ?""",
         (
             result.get("overall_score", 0.0),
@@ -267,6 +293,64 @@ def update_deep_score(
             result.get("why_interesting", ""),
             json.dumps(result.get("tags", [])),
             result.get("analysis", ""),
+            now,
             arxiv_id,
         ),
     )
+
+
+def list_papers_for_stage_a(
+    conn: sqlite3.Connection,
+    since: datetime,
+    limit: int = 50,
+) -> list[dict]:
+    """List papers from the last N days that need abstract scoring."""
+    rows = conn.execute(
+        """SELECT * FROM papers
+           WHERE published_at >= ?
+           ORDER BY published_at DESC
+           LIMIT ?""",
+        (since.isoformat(), limit),
+    )
+    return [dict(row) for row in rows]
+
+
+def list_papers_for_stage_b(
+    conn: sqlite3.Connection,
+    since: datetime,
+    threshold: float = 6.0,
+    limit: int = 20,
+) -> list[dict]:
+    """List papers with abs_score >= threshold needing deep scoring.
+
+    Skips papers that already have a recent deep_score (within 1 day).
+    """
+    one_day_ago = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    rows = conn.execute(
+        """SELECT * FROM papers
+           WHERE published_at >= ?
+           AND abs_score >= ?
+           AND (deep_score IS NULL OR deep_score_updated_at < ?)
+           ORDER BY abs_score DESC
+           LIMIT ?""",
+        (since.isoformat(), threshold, one_day_ago, limit),
+    )
+    return [dict(row) for row in rows]
+
+
+def list_unnotified_papers(
+    conn: sqlite3.Connection,
+    since: datetime,
+    limit: int = 20,
+) -> list[dict]:
+    """List papers with deep_score that haven't been notified yet."""
+    rows = conn.execute(
+        """SELECT * FROM papers
+           WHERE published_at >= ?
+           AND deep_score IS NOT NULL
+           AND picked = 0
+           ORDER BY deep_score DESC
+           LIMIT ?""",
+        (since.isoformat(), limit),
+    )
+    return [dict(row) for row in rows]
