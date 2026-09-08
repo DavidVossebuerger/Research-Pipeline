@@ -114,14 +114,17 @@ def install(yes: bool):
     reload(config_module)
     cfg = config_module.CFG
 
-    # Step 1: Install Target
+    # Step 1: Install Target (no default — user must choose explicitly)
     click.echo("[1/9] Install Target")
     if yes:
         install_target = 1
     else:
-        click.echo("  1) This device (default - install locally)")
+        click.echo("  1) This device (install locally)")
         click.echo("  2) Custom device (install on a remote server via SSH)")
-        install_target = click.prompt("Choice [1]", default=1, type=int)
+        install_target = click.prompt("Choice (1 or 2)", type=int)
+        while install_target not in (1, 2):
+            click.echo("  ✗ Please enter 1 or 2")
+            install_target = click.prompt("Choice (1 or 2)", type=int)
 
     ssh_conn: SSHConnection | None = None
     remote_install = install_target == 2
@@ -190,22 +193,15 @@ def install(yes: bool):
         if provider in provider_map:
             provider = provider_map[provider]
     else:
-        click.echo("  1) Ollama (local, recommended for first install)")
+        click.echo("  1) Ollama (local)")
         click.echo("  2) Custom API — OpenAI-compatible")
         click.echo("  3) Custom API — Anthropic-compatible")
 
-        # Determine default choice number
-        default_choice = "1"
-        if default_provider in provider_map:
-            default_choice = default_provider
-        elif default_provider in provider_map.values():
-            for k, v in provider_map.items():
-                if v == default_provider:
-                    default_choice = k
-                    break
-
-        prompt = f"Choice [{default_choice}]"
-        provider_choice = click.prompt(prompt, default=default_choice, type=int)
+        # No default — user must explicitly choose 1, 2, or 3
+        provider_choice = click.prompt("Choice (1, 2, or 3)", type=int)
+        while provider_choice not in (1, 2, 3):
+            click.echo("  ✗ Please enter 1, 2, or 3")
+            provider_choice = click.prompt("Choice (1, 2, or 3)", type=int)
 
         # Determine provider name
         if provider_choice == 1 or provider_choice == "ollama":
