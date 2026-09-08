@@ -100,12 +100,26 @@ def install_cron_entry(python_path: str | None = None) -> tuple[bool, str | None
     Returns:
         tuple of (success, error_message)
     """
-    # Parse schedule
-    time_parts = CFG.cron_daily_time.split(":")
-    if len(time_parts) != 2:
-        return False, f"Invalid schedule time: {CFG.cron_daily_time}"
+    # Parse schedule (HH:MM format)
+    parts = CFG.cron_daily_time.split(":")
+    if len(parts) != 2:
+        return False, f"Invalid schedule time: {CFG.cron_daily_time!r}"
 
-    minute, hour = time_parts
+    hour, minute = parts  # HH:MM -> hour, minute
+
+    # Validate hour and minute ranges
+    try:
+        hour_int = int(hour)
+        minute_int = int(minute)
+        if not (0 <= hour_int <= 23):
+            return False, f"Invalid schedule time: hour {hour} out of range (0-23)"
+        if not (0 <= minute_int <= 59):
+            return False, f"Invalid schedule time: minute {minute} out of range (0-59)"
+    except ValueError:
+        return False, f"Invalid schedule time: {CFG.cron_daily_time!r}"
+
+    # Cron syntax is: MIN HOUR DOM MON DOW
+    # So "07:30" becomes "30 7 * * *"
 
     # Build command
     python = python_path or "python3"
