@@ -208,3 +208,50 @@ def record_ai_event(
             json.dumps(metadata) if metadata else None,
         ),
     )
+
+
+def update_abstract_score(
+    conn: sqlite3.Connection,
+    arxiv_id: str,
+    score: float,
+    reason: str,
+    tags: list[str],
+) -> None:
+    """Update the abstract scoring results for a paper."""
+    conn.execute(
+        """UPDATE papers
+           SET abs_score = ?, abs_reason = ?, abs_tags = ?
+           WHERE arxiv_id = ?""",
+        (score, reason, json.dumps(tags), arxiv_id),
+    )
+
+
+def update_deep_score(
+    conn: sqlite3.Connection,
+    arxiv_id: str,
+    result: dict[str, Any],
+) -> None:
+    """Update the deep scoring results for a paper.
+
+    Args:
+        conn: Database connection
+        arxiv_id: The paper's arXiv ID
+        result: Dict with keys: overall_score, summary, why_interesting, tags, analysis
+    """
+    conn.execute(
+        """UPDATE papers
+           SET deep_score = ?,
+               deep_summary = ?,
+               deep_why = ?,
+               deep_tags = ?,
+               deep_analysis = ?
+           WHERE arxiv_id = ?""",
+        (
+            result.get("overall_score", 0.0),
+            result.get("summary", ""),
+            result.get("why_interesting", ""),
+            json.dumps(result.get("tags", [])),
+            result.get("analysis", ""),
+            arxiv_id,
+        ),
+    )
