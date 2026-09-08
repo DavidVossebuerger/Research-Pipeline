@@ -1,18 +1,16 @@
 """Pipeline runner orchestrator — fetch, score, notify."""
+
 from __future__ import annotations
 
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import UTC, datetime
 
 from research_pipeline import config as config_module
 from research_pipeline import db as db_module
-from research_pipeline import fetch_arxiv
-from research_pipeline import notify
-from research_pipeline import pdf_extract
+from research_pipeline import fetch_arxiv, notify, pdf_extract
 from research_pipeline import score as score_module
-from research_pipeline.logging_setup import setup_logging
 from research_pipeline.config import Config
+from research_pipeline.logging_setup import setup_logging
 
 logger = setup_logging("research_pipeline")
 
@@ -79,9 +77,7 @@ def run_pipeline(
                     stage_a_papers.append(paper)
                     continue
 
-                future = executor.submit(
-                    _score_abstract_safe, paper, cfg
-                )
+                future = executor.submit(_score_abstract_safe, paper, cfg)
                 futures[future] = paper
 
             for future in as_completed(futures):
@@ -99,7 +95,7 @@ def run_pipeline(
                         stage_a_papers.append(paper)
                     else:
                         errors.append(paper["arxiv_id"])
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(
                         "Stage A error for %s: %s",
                         paper["arxiv_id"],
@@ -132,9 +128,7 @@ def run_pipeline(
         with ThreadPoolExecutor(max_workers=MAX_SCORE_WORKERS) as executor:
             futures = {}
             for paper in stage_b_papers:
-                future = executor.submit(
-                    _score_deep_safe, paper, cfg
-                )
+                future = executor.submit(_score_deep_safe, paper, cfg)
                 futures[future] = paper
 
             for future in as_completed(futures):
@@ -146,7 +140,7 @@ def run_pipeline(
                         deep_scored_papers.append((result.get("overall_score", 0), paper))
                     else:
                         errors.append(f"{paper['arxiv_id']} (deep)")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(
                         "Stage B error for %s: %s",
                         paper["arxiv_id"],
@@ -176,9 +170,11 @@ def run_pipeline(
         logger.info("Picked %d papers (top %d)", papers_picked, cfg.notify_top_k)
 
         # Step 7: Notify
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         if dry_run:
-            logger.info("[DRY RUN] Would send %d picks: %s", papers_picked, [p["title"] for p in picks])
+            logger.info(
+                "[DRY RUN] Would send %d picks: %s", papers_picked, [p["title"] for p in picks]
+            )
         else:
             # Prepare pick dicts for notify
             pick_dicts = []
@@ -205,7 +201,7 @@ def run_pipeline(
         )
 
     except Exception as e:
-        logger.exception("Pipeline run failed: %s", e)
+        logger.exception("Pipeline run failed")
         if conn and run_id is not None:
             try:
                 db_module.finish_run(
@@ -217,7 +213,8 @@ def run_pipeline(
                 )
                 conn.commit()
             except Exception:
-                pass
+                # Best effort - don't fail the error reporting
+                logger.debug("Ignoring error during error reporting", exc_info=True)
         return {"papers_seen": papers_seen, "papers_picked": 0, "errors": errors + [str(e)]}
 
     finally:
@@ -231,7 +228,7 @@ def _score_abstract_safe(paper: dict, cfg: Config) -> dict | None:
     """Score paper abstract, returning None on error."""
     try:
         return score_module.score_abstract(paper, cfg=cfg)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Abstract scoring failed for %s: %s", paper["arxiv_id"], e)
         return None
 
@@ -252,6 +249,6 @@ def _score_deep_safe(paper: dict, cfg: Config) -> dict | None:
             return None
 
         return score_module.score_deep(paper, pdf_text, cfg=cfg)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Deep scoring failed for %s: %s", paper["arxiv_id"], e)
         return None

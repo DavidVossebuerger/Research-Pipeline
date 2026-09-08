@@ -22,7 +22,7 @@ def extract_text(pdf_path: Path, max_pages: int | None = None) -> str:
     """
     try:
         reader = PdfReader(str(pdf_path))
-    except Exception as e:
+    except OSError as e:
         log.warning("Failed to read PDF %s: %s", pdf_path, e)
         return ""
 
@@ -37,7 +37,7 @@ def extract_text(pdf_path: Path, max_pages: int | None = None) -> str:
             text = page.extract_text()
             if text:
                 text_parts.append(text)
-        except Exception as e:
+        except OSError as e:
             log.warning("Failed to extract text from page %d of %s: %s", i, pdf_path, e)
 
     # Join and normalize whitespace

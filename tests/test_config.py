@@ -1,4 +1,5 @@
 """Tests for config.py — env loading and parsing."""
+
 from __future__ import annotations
 
 # Import the module to test (will reload with monkeypatched env)
@@ -96,14 +97,32 @@ class TestConfigDefaults:
         """Test that CFG has expected defaults when no env vars are set."""
         # Clear all env vars that config reads
         env_vars = [
-            "LLM_PROVIDER", "LLM_MODEL", "LLM_BASE_URL", "LLM_API_KEY",
-            "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_TOPIC_PICKS", "TELEGRAM_TOPIC_SUMMARY",
-            "CRON_DAILY_TIME", "CRON_AUTOBUILD_POLL",
-            "FEATURE_DAILY_SUMMARY_ENABLED", "FEATURE_WEEKLY_DIGEST_ENABLED",
-            "FEATURE_AUTOBUILD_ENABLED", "FEATURE_TELEGRAM_BOT_ENABLED", "FEATURE_BACKFILL_ENABLED",
-            "ARXIV_CATEGORIES", "ARXIV_LOOKBACK_HOURS", "ARXIV_MAX_RESULTS", "ARXIV_FIXTURE_PATH",
-            "SCORE_STAGE_A_THRESHOLD", "SCORE_STAGE_B_TOP_K", "NOTIFY_TOP_K",
-            "DB_PATH", "PDF_DIR", "LOG_DIR", "AUTOBUILD_DATA_DIR",
+            "LLM_PROVIDER",
+            "LLM_MODEL",
+            "LLM_BASE_URL",
+            "LLM_API_KEY",
+            "TELEGRAM_BOT_TOKEN",
+            "TELEGRAM_CHAT_ID",
+            "TELEGRAM_TOPIC_PICKS",
+            "TELEGRAM_TOPIC_SUMMARY",
+            "CRON_DAILY_TIME",
+            "CRON_AUTOBUILD_POLL",
+            "FEATURE_DAILY_SUMMARY_ENABLED",
+            "FEATURE_WEEKLY_DIGEST_ENABLED",
+            "FEATURE_AUTOBUILD_ENABLED",
+            "FEATURE_TELEGRAM_BOT_ENABLED",
+            "FEATURE_BACKFILL_ENABLED",
+            "ARXIV_CATEGORIES",
+            "ARXIV_LOOKBACK_HOURS",
+            "ARXIV_MAX_RESULTS",
+            "ARXIV_FIXTURE_PATH",
+            "SCORE_STAGE_A_THRESHOLD",
+            "SCORE_STAGE_B_TOP_K",
+            "NOTIFY_TOP_K",
+            "DB_PATH",
+            "PDF_DIR",
+            "LOG_DIR",
+            "AUTOBUILD_DATA_DIR",
         ]
         for var in env_vars:
             monkeypatch.delenv(var, raising=False)

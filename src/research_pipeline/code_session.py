@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -62,9 +60,8 @@ class CodeSession:
 
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-        # Open log file for stdout/stderr capture
-        log_fp = open(self._log_file, "w")
-
+        # Open log file for stdout/stderr capture - must stay open for subprocess
+        log_fp = open(self._log_file, "w")  # noqa: SIM115
         self._proc = subprocess.Popen(
             self.command,
             cwd=str(self.work_dir),
@@ -147,5 +144,5 @@ class CodeSession:
         try:
             lines = self._log_file.read_text(encoding="utf-8", errors="replace").splitlines()
             return "\n".join(lines[-n:])
-        except Exception:
+        except OSError:
             return ""

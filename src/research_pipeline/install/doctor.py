@@ -1,4 +1,5 @@
 """Doctor and diagnosis functions for install CLI."""
+
 from __future__ import annotations
 
 from research_pipeline.config import CFG
@@ -23,12 +24,14 @@ class DoctorResult:
         if is_failure:
             self.failures += 1
 
-        self.checks.append({
-            "name": name,
-            "status": status,
-            "message": message,
-            "suggestion": suggestion,
-        })
+        self.checks.append(
+            {
+                "name": name,
+                "status": status,
+                "message": message,
+                "suggestion": suggestion,
+            }
+        )
 
     @property
     def exit_code(self) -> int:
@@ -124,14 +127,15 @@ def run_doctor(verbose: bool = False) -> DoctorResult:
             try:
                 # Get last run time from log file
                 mtime = log_file.stat().st_mtime
-                from datetime import datetime
-                last_run = datetime.fromtimestamp(mtime)
+                from datetime import UTC, datetime
+
+                last_run = datetime.fromtimestamp(mtime, tz=UTC)
                 result.add_check(
                     "Last run",
                     "ok",
                     f"{last_run.strftime('%Y-%m-%d %H:%M')}",
                 )
-            except Exception:
+            except OSError:
                 result.add_check("Last run", "warning", "Cannot read last run time")
         else:
             result.add_check("Last run", "warning", "No runs recorded yet")
@@ -187,7 +191,7 @@ def run_diagnose() -> dict:
                 "elapsed": elapsed,
                 "error": None if resp.status == 200 else f"HTTP {resp.status}",
             }
-    except Exception as e:
+    except OSError as e:
         results["arxiv"] = {
             "success": False,
             "status_code": None,

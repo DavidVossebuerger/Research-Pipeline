@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+
 import pytest
-from pathlib import Path
 
 from research_pipeline.code_session import CodeSession
 
@@ -34,7 +34,7 @@ def test_poll_shows_not_done_immediately(tmp_work_dir):
         command=["python3", "-c", "print('hello'); import time; time.sleep(0.5)"],
     )
     session.start()
-    return_code, is_done = session.poll()
+    _return_code, is_done = session.poll()
     assert is_done is False
     # Clean up
     session.terminate()
@@ -75,7 +75,7 @@ def test_terminate_kills_long_running_process(tmp_work_dir):
     # Terminate it
     session.terminate()
     # Now poll should show it's done (killed)
-    return_code, is_done = session.poll()
+    _return_code, is_done = session.poll()
     assert is_done is True
 
 

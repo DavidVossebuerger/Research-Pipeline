@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from research_pipeline.db import (
+    finish_run,
     get_connection,
-    init_schema,
-    upsert_paper,
     get_paper,
-    update_abstract_score,
-    update_deep_score,
+    init_schema,
     mark_picked,
     start_run,
-    finish_run,
+    update_abstract_score,
+    update_deep_score,
+    upsert_paper,
 )
 
 
@@ -120,7 +120,7 @@ class TestRunPipeline:
         mock_cfg.telegram_topic_picks = ""
 
         # Create a real connection for testing
-        db_path = conn.execute("SELECT 1").fetchone()
+        _db_path = conn.execute("SELECT 1").fetchone()
 
         def mock_get_connection(path):
             return conn
@@ -238,10 +238,10 @@ class TestRunPipeline:
 
         # Mock score functions to raise errors
         def mock_score_abstract_error(paper, *, cfg):
-            raise Exception("LLM API error")
+            raise RuntimeError("LLM API error")
 
         def mock_score_deep_error(paper, pdf_text, *, cfg):
-            raise Exception("LLM API error")
+            raise RuntimeError("LLM API error")
 
         monkeypatch.setattr(runner, "config_module", MagicMock())
         monkeypatch.setattr(runner.config_module, "load_config", lambda: mock_cfg)
@@ -351,7 +351,9 @@ class TestRunPipeline:
         monkeypatch.setattr(runner.fetch_arxiv, "download_pdf", mock_download_pdf)
         monkeypatch.setattr(runner.pdf_extract, "extract_first_n_chars", mock_extract_text)
 
-        monkeypatch.setattr(runner.notify, "send_top_picks", lambda *a, **kw: notify_calls.append((a, kw)))
+        monkeypatch.setattr(
+            runner.notify, "send_top_picks", lambda *a, **kw: notify_calls.append((a, kw))
+        )
 
         # Run with dry_run=True
         result = runner.run_pipeline(dry_run=True)
@@ -398,7 +400,7 @@ class TestRunPipeline:
         def mock_score_abstract_with_failure(paper, *, cfg):
             call_count["count"] += 1
             if call_count["count"] == 1:
-                raise Exception("Simulated error")
+                raise RuntimeError("Simulated error")
             return {"score": 8.5, "reason": "Good", "tags": []}
 
         monkeypatch.setattr(runner, "config_module", MagicMock())

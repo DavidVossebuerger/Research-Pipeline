@@ -1,4 +1,5 @@
 """Ollama helper functions for install CLI."""
+
 from __future__ import annotations
 
 import subprocess
@@ -11,6 +12,7 @@ from research_pipeline.config import CFG
 
 class OllamaStatus(NamedTuple):
     """Status result from Ollama check."""
+
     installed: bool
     version: str | None
     model_installed: bool
@@ -26,6 +28,7 @@ def check_ollama_installed() -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode == 0:
             # Parse version from output like "ollama version 0.1.0"
@@ -55,6 +58,7 @@ def check_model_installed(model_name: str | None = None) -> bool:
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
         if result.returncode == 0:
             # Model is listed if present in output
@@ -72,6 +76,7 @@ def pull_model(model_name: str | None = None) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         timeout=300,
+        check=False,
     )
 
 
@@ -105,11 +110,13 @@ def test_generation() -> tuple[bool, float, int]:
     try:
         req = urllib.request.Request(
             f"{CFG.llm_base_url}/api/generate",
-            data=json.dumps({
-                "model": CFG.llm_model,
-                "prompt": prompt,
-                "stream": False,
-            }).encode("utf-8"),
+            data=json.dumps(
+                {
+                    "model": CFG.llm_model,
+                    "prompt": prompt,
+                    "stream": False,
+                }
+            ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -120,5 +127,5 @@ def test_generation() -> tuple[bool, float, int]:
             elapsed = time.time() - start
             tokens = data.get("eval_count", 0)
             return True, elapsed, tokens
-    except Exception:
+    except OSError:
         return False, 0.0, 0

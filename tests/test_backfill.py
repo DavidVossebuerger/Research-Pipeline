@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,8 +11,8 @@ from research_pipeline import backfill
 from research_pipeline.db import (
     get_connection,
     init_schema,
-    upsert_paper,
     migrate_add_deep_score_updated_at,
+    upsert_paper,
 )
 
 
@@ -38,7 +38,7 @@ def sample_papers(conn):
             "abstract": "Abstract 1",
             "categories": ["cs.LG"],
             "pdf_url": "https://arxiv.org/pdf/2401.00001.pdf",
-            "published_at": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+            "published_at": (datetime.now(UTC) - timedelta(days=2)).isoformat(),
         },
         {
             "arxiv_id": "2401.00002",
@@ -47,7 +47,7 @@ def sample_papers(conn):
             "abstract": "Abstract 2",
             "categories": ["stat.ML"],
             "pdf_url": "https://arxiv.org/pdf/2401.00002.pdf",
-            "published_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+            "published_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
         },
         {
             "arxiv_id": "2401.00003",
@@ -56,7 +56,7 @@ def sample_papers(conn):
             "abstract": "Abstract 3",
             "categories": ["q-fin.GN"],
             "pdf_url": "https://arxiv.org/pdf/2401.00003.pdf",
-            "published_at": datetime.now(timezone.utc).isoformat(),
+            "published_at": datetime.now(UTC).isoformat(),
         },
     ]
     for p in papers:
@@ -83,6 +83,7 @@ class TestStageA:
         }
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["stage-a", "--days=7", "--limit=10"])
 
@@ -101,6 +102,7 @@ class TestStageA:
         mock_get_conn.return_value = conn
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["stage-a", "--days=7", "--dry-run"])
 
@@ -116,7 +118,13 @@ class TestStageB:
     @patch("research_pipeline.backfill.load_config")
     @patch("research_pipeline.backfill.get_connection")
     def test_stage_b_filters_by_threshold(
-        self, mock_get_conn, mock_load_cfg, mock_score_deep, mock_download_pdf, mock_extract_text, conn
+        self,
+        mock_get_conn,
+        mock_load_cfg,
+        mock_score_deep,
+        mock_download_pdf,
+        mock_extract_text,
+        conn,
     ):
         """stage-b should only process papers with abs_score >= threshold."""
         # Insert papers with different abstract scores
@@ -127,7 +135,7 @@ class TestStageB:
                 "2401.00010",
                 "High Score",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 8.0,
                 "https://arxiv.org/pdf/2401.00010.pdf",
             ),
@@ -139,7 +147,7 @@ class TestStageB:
                 "2401.00011",
                 "Low Score",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 4.0,
                 "https://arxiv.org/pdf/2401.00011.pdf",
             ),
@@ -161,6 +169,7 @@ class TestStageB:
         }
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["stage-b", "--days=7", "--threshold=6.0"])
 
@@ -177,7 +186,7 @@ class TestStageB:
     ):
         """stage-b should skip papers that already have a recent deep_score."""
         # Insert paper with recent deep_score_updated_at
-        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        one_hour_ago = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         conn.execute(
             """INSERT INTO papers (arxiv_id, title, abstract, published_at, abs_score, deep_score, deep_score_updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
@@ -185,7 +194,7 @@ class TestStageB:
                 "2401.00020",
                 "Recent Deep",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 8.0,
                 9.0,
                 one_hour_ago,
@@ -197,8 +206,9 @@ class TestStageB:
         mock_get_conn.return_value = conn
 
         from click.testing import CliRunner
+
         runner = CliRunner()
-        result = runner.invoke(backfill.cli, ["stage-b", "--days=7", "--threshold=6.0"])
+        _result = runner.invoke(backfill.cli, ["stage-b", "--days=7", "--threshold=6.0"])
 
         # Should not try to score the paper with recent deep_score
         mock_download_pdf.assert_not_called()
@@ -207,9 +217,7 @@ class TestStageB:
     @patch("research_pipeline.backfill.score.score_deep")
     @patch("research_pipeline.backfill.load_config")
     @patch("research_pipeline.backfill.get_connection")
-    def test_stage_b_dry_run(
-        self, mock_get_conn, mock_load_cfg, mock_score_deep, conn
-    ):
+    def test_stage_b_dry_run(self, mock_get_conn, mock_load_cfg, mock_score_deep, conn):
         """stage-b with --dry-run should NOT call score_deep."""
         # Insert paper with abs_score >= threshold
         conn.execute(
@@ -219,7 +227,7 @@ class TestStageB:
                 "2401.00050",
                 "Test Paper",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 7.5,
                 "https://arxiv.org/pdf/2401.00050.pdf",
             ),
@@ -230,6 +238,7 @@ class TestStageB:
         mock_get_conn.return_value = conn
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["stage-b", "--days=7", "--dry-run"])
 
@@ -254,7 +263,7 @@ class TestNotify:
                 "2401.00030",
                 "Already Picked",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 9.0,
                 1,  # picked = 1
             ),
@@ -266,6 +275,7 @@ class TestNotify:
         mock_get_conn.return_value = conn
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["notify", "--days=7"])
 
@@ -275,9 +285,7 @@ class TestNotify:
     @patch("research_pipeline.backfill.notify.send_top_picks")
     @patch("research_pipeline.backfill.load_config")
     @patch("research_pipeline.backfill.get_connection")
-    def test_notify_dry_run(
-        self, mock_get_conn, mock_load_cfg, mock_send_picks, conn
-    ):
+    def test_notify_dry_run(self, mock_get_conn, mock_load_cfg, mock_send_picks, conn):
         """notify with --dry-run should NOT call send_top_picks."""
         # Insert paper with deep_score
         conn.execute(
@@ -287,7 +295,7 @@ class TestNotify:
                 "2401.00040",
                 "Test Paper",
                 "Abstract",
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
                 9.0,
                 0,
             ),
@@ -299,6 +307,7 @@ class TestNotify:
         mock_get_conn.return_value = conn
 
         from click.testing import CliRunner
+
         runner = CliRunner()
         result = runner.invoke(backfill.cli, ["notify", "--days=7", "--dry-run"])
 

@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from research_pipeline import db
-from research_pipeline.config import Config
-from research_pipeline import weekly_digest
+import pytest
+
+from research_pipeline import db, weekly_digest
 
 
 class MockConfig:
     """Mock config for testing."""
+
     db_path = None  # Will be set in fixtures
     feature_weekly_digest_enabled = True
     telegram_topic_summary = "summary-topic"
@@ -105,9 +104,11 @@ class TestSendWeeklyDigest:
         """send_weekly_digest calls notify.send_raw with formatted text."""
         _insert_paper(conn, "2401.12345", "Test Paper", "2026-09-07T10:00:00", deep_score=8.0)
 
-        with patch("research_pipeline.weekly_digest.db.get_connection", return_value=conn), \
-             patch("research_pipeline.weekly_digest.notify") as mock_notify, \
-             patch("research_pipeline.weekly_digest.narrative_review") as mock_narrative:
+        with (
+            patch("research_pipeline.weekly_digest.db.get_connection", return_value=conn),
+            patch("research_pipeline.weekly_digest.notify") as mock_notify,
+            patch("research_pipeline.weekly_digest.narrative_review") as mock_narrative,
+        ):
             mock_notify.send_raw.return_value = True
             mock_narrative.generate_weekly_narrative.return_value = "Weekly narrative"
 
@@ -132,9 +133,11 @@ class TestSendWeeklyDigest:
         """send_weekly_digest passes telegram_topic_summary to notify."""
         _insert_paper(conn, "2401.12345", "Test Paper", "2026-09-07T10:00:00", deep_score=8.0)
 
-        with patch("research_pipeline.weekly_digest.db.get_connection", return_value=conn), \
-             patch("research_pipeline.weekly_digest.notify") as mock_notify, \
-             patch("research_pipeline.weekly_digest.narrative_review") as mock_narrative:
+        with (
+            patch("research_pipeline.weekly_digest.db.get_connection", return_value=conn),
+            patch("research_pipeline.weekly_digest.notify") as mock_notify,
+            patch("research_pipeline.weekly_digest.narrative_review") as mock_narrative,
+        ):
             mock_notify.send_raw.return_value = True
             mock_narrative.generate_weekly_narrative.return_value = "Narrative"
 

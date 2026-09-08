@@ -1,4 +1,5 @@
 """Install wizard CLI - the main entry point for research-pipeline-install."""
+
 from __future__ import annotations
 
 import json
@@ -81,6 +82,7 @@ def install(yes: bool):
     from importlib import reload
 
     import research_pipeline.config as config_module
+
     reload(config_module)
     cfg = config_module.CFG
 
@@ -159,7 +161,9 @@ def install(yes: bool):
                 click.echo("  Skipping chat ID")
             else:
                 while True:
-                    input_chat = click.prompt("Chat ID (your Telegram user/chat ID): ", default=chat_id)
+                    input_chat = click.prompt(
+                        "Chat ID (your Telegram user/chat ID): ", default=chat_id
+                    )
                     if not input_chat:
                         click.echo("  Skipping chat ID")
                         break
@@ -194,7 +198,9 @@ def install(yes: bool):
     if yes and "FEATURE_TELEGRAM_BOT_ENABLED" in existing_env:
         tg_bot_enabled = existing_env["FEATURE_TELEGRAM_BOT_ENABLED"].lower() == "true"
     else:
-        tg_bot_enabled = click.confirm("  Enable Telegram bot (interactive commands)?", default=False)
+        tg_bot_enabled = click.confirm(
+            "  Enable Telegram bot (interactive commands)?", default=False
+        )
 
     if yes and "FEATURE_BACKFILL_ENABLED" in existing_env:
         backfill_enabled = existing_env["FEATURE_BACKFILL_ENABLED"].lower() == "true"
@@ -324,6 +330,7 @@ def run(dry_run: bool, lookback_hours: int | None, max_papers: int | None, json_
 
     import research_pipeline.config as config_module
     from research_pipeline.runtime import runner
+
     reload(config_module)
 
     result = runner.run_pipeline(
@@ -335,7 +342,9 @@ def run(dry_run: bool, lookback_hours: int | None, max_papers: int | None, json_
     if json_output:
         click.echo(json.dumps(result))
     else:
-        click.echo(f"Pipeline run complete: {result['papers_seen']} seen, {result['papers_picked']} picked")
+        click.echo(
+            f"Pipeline run complete: {result['papers_seen']} seen, {result['papers_picked']} picked"
+        )
         if result["errors"]:
             click.echo(f"Errors: {result['errors']}")
 
@@ -345,6 +354,7 @@ def update():
     """Refresh Ollama model + cron entry."""
     # Reload config
     import research_pipeline.config as config_module
+
     reload(config_module)
     cfg = config_module.CFG
 
@@ -369,6 +379,7 @@ def update():
 def status():
     """Health check - one line per check."""
     import research_pipeline.config as config_module
+
     reload(config_module)
 
     # Ollama
@@ -411,8 +422,9 @@ def status():
     log_file = log_dir / "pipeline.log"
     if log_file.exists():
         mtime = log_file.stat().st_mtime
-        from datetime import datetime
-        last_run = datetime.fromtimestamp(mtime)
+        from datetime import UTC, datetime
+
+        last_run = datetime.fromtimestamp(mtime, tz=UTC)
         click.echo(f"Last run               ✓ ({last_run.strftime('%Y-%m-%d %H:%M')})")
     else:
         click.echo("Last run               ⚠ no runs recorded yet")
@@ -424,6 +436,7 @@ def status():
 def logs(follow: bool, since_date: str | None):
     """Tail logs (default last 100 lines, -f for follow)."""
     import research_pipeline.config as config_module
+
     reload(config_module)
 
     log_dir = config_module.CFG.log_dir
@@ -442,6 +455,7 @@ def logs(follow: bool, since_date: str | None):
     if follow:
         # Tail -f mode
         import subprocess
+
         processes = []
         for log_file in log_files:
             if log_file.exists():
@@ -479,7 +493,9 @@ def diagnose():
     click.echo("[1/3] Ollama generation")
     ollama_result = results["ollama"]
     if ollama_result["success"]:
-        click.echo(f"  → POST {CFG.llm_base_url}/api/generate  → 200 ({ollama_result['elapsed']:.1f}s, {ollama_result['tokens']} tokens)")
+        click.echo(
+            f"  → POST {CFG.llm_base_url}/api/generate  → 200 ({ollama_result['elapsed']:.1f}s, {ollama_result['tokens']} tokens)"
+        )
         click.echo("  ✓ Model responds correctly")
     else:
         click.echo(f"  ✗ {ollama_result.get('error', 'Failed')}")
@@ -488,7 +504,9 @@ def diagnose():
     click.echo("\n[2/3] arXiv API")
     arxiv_result = results["arxiv"]
     if arxiv_result["success"]:
-        click.echo(f"  → GET http://export.arxiv.org/api/query  → {arxiv_result['status_code']} ({arxiv_result['elapsed']:.1f}s)")
+        click.echo(
+            f"  → GET http://export.arxiv.org/api/query  → {arxiv_result['status_code']} ({arxiv_result['elapsed']:.1f}s)"
+        )
         click.echo("  ✓ API reachable")
     else:
         click.echo(f"  ✗ {arxiv_result.get('error', 'Failed')}")
@@ -509,10 +527,9 @@ def diagnose():
 @click.option("--purge", is_flag=True, help="Also delete .env file")
 def uninstall(dry_run: bool, purge: bool):
     """Remove cron entry, optionally purge .env."""
-    if not dry_run:
-        if not click.confirm("Remove cron entry?", default=False):
-            click.echo("Aborted.")
-            sys.exit(1)
+    if not dry_run and not click.confirm("Remove cron entry?", default=False):
+        click.echo("Aborted.")
+        sys.exit(1)
 
     # Remove cron
     if not dry_run:
@@ -544,6 +561,7 @@ def uninstall(dry_run: bool, purge: bool):
 def doctor(verbose: bool):
     """Full system check with fix suggestions."""
     import research_pipeline.config as config_module
+
     reload(config_module)
 
     result = doctor_module.run_doctor(verbose=verbose)

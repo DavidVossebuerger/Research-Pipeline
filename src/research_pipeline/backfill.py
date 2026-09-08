@@ -5,30 +5,28 @@ Provides three subcommands:
 - stage-b: Re-score deep (PDF) for borderline papers
 - notify: Send picks for the last N days (idempotent via db.mark_picked)
 """
+
 from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import click
 
+from . import fetch_arxiv, notify, score
 from .config import load_config
 from .db import (
     get_connection,
     init_schema,
-    migrate_add_deep_score_updated_at,
-    set_abstract_score,
-    update_deep_score,
     list_papers_for_stage_a,
     list_papers_for_stage_b,
     list_unnotified_papers,
     mark_picked,
+    migrate_add_deep_score_updated_at,
+    set_abstract_score,
+    update_deep_score,
 )
-from . import score
-from . import notify
-from . import fetch_arxiv
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +36,6 @@ MAX_WORKERS = 4
 @click.group()
 def cli():
     """Backfill historical papers (re-fetch, re-score, re-notify)."""
-    pass
 
 
 @cli.command("stage-a")
@@ -52,7 +49,7 @@ def stage_a(days: int, limit: int, dry_run: bool):
     init_schema(conn)
     migrate_add_deep_score_updated_at(conn)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     papers = list_papers_for_stage_a(conn, cutoff, limit)
 
     if not papers:
@@ -75,7 +72,7 @@ def stage_a(days: int, limit: int, dry_run: bool):
         try:
             result = score.score_abstract(paper, cfg=cfg)
             return (arxiv_id, True, result)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning("Failed to score %s: %s", arxiv_id, e)
             return (arxiv_id, False, None)
 
@@ -84,11 +81,15 @@ def stage_a(days: int, limit: int, dry_run: bool):
         for future in as_completed(futures):
             arxiv_id, success, result = future.result()
             if success and result:
-                set_abstract_score(conn, arxiv_id, result["score"], result["reason"], result["tags"])
+                set_abstract_score(
+                    conn, arxiv_id, result["score"], result["reason"], result["tags"]
+                )
                 scored += 1
             else:
                 failed += 1
-            click.echo(f"  Scored {arxiv_id}: score={result.get('score', 'N/A') if result else 'FAILED'}")
+            click.echo(
+                f"  Scored {arxiv_id}: score={result.get('score', 'N/A') if result else 'FAILED'}"
+            )
 
     conn.commit()
     conn.close()
@@ -108,14 +109,16 @@ def stage_b(days: int, threshold: float, limit: int, dry_run: bool):
     init_schema(conn)
     migrate_add_deep_score_updated_at(conn)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     papers = list_papers_for_stage_b(conn, cutoff, threshold, limit)
 
     if not papers:
         click.echo("No papers found for deep scoring (stage-b).")
         return
 
-    click.echo(f"Found {len(papers)} papers to deep-score (days={days}, threshold={threshold}, limit={limit})")
+    click.echo(
+        f"Found {len(papers)} papers to deep-score (days={days}, threshold={threshold}, limit={limit})"
+    )
 
     if dry_run:
         for p in papers:
@@ -139,12 +142,13 @@ def stage_b(days: int, threshold: float, limit: int, dry_run: bool):
 
         try:
             from . import pdf_extract
+
             pdf_text = pdf_extract.extract_text(pdf_path)
             if not pdf_text:
                 return (arxiv_id, False, False, None)
             result = score.score_deep(paper, pdf_text, cfg=cfg)
             return (arxiv_id, True, False, result)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             log.warning("Failed to deep-score %s: %s", arxiv_id, e)
             return (arxiv_id, False, False, None)
 
@@ -166,7 +170,9 @@ def stage_b(days: int, threshold: float, limit: int, dry_run: bool):
     conn.commit()
     conn.close()
 
-    click.echo(f"\nStage-b complete: {scored} scored, {failed} failed, {skipped_no_pdf} skipped (no PDF)")
+    click.echo(
+        f"\nStage-b complete: {scored} scored, {failed} failed, {skipped_no_pdf} skipped (no PDF)"
+    )
 
 
 @cli.command("notify")
@@ -178,7 +184,7 @@ def notify_cmd(days: int, dry_run: bool):
     conn = get_connection(cfg.db_path)
     init_schema(conn)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     papers = list_unnotified_papers(conn, cutoff, limit=cfg.notify_top_k)
 
     if not papers:
@@ -208,7 +214,7 @@ def notify_cmd(days: int, dry_run: bool):
         return
 
     # Send notifications
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.now(UTC).strftime("%Y-%m-%d")
     success = notify.send_top_picks(picks, date_str, cfg)
 
     if success:

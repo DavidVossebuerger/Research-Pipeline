@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .config import Config
 from . import score
+from .config import Config
 
 log = logging.getLogger(__name__)
 
@@ -108,7 +108,8 @@ Schreibe einen deutschen Narrative (4-8 Sätze), der diese Papers verbindet:"""
         # Strip any think blocks if present
         raw = score._strip_think(raw) if hasattr(score, "_strip_think") else raw
         return raw.strip()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Catch all failures to ensure pipeline continues - one paper's failure shouldn't stop the pipeline
         log.warning("generate_narrative failed: %s", e)
         return ""
 
@@ -133,9 +134,7 @@ def generate_weekly_narrative(papers_by_day: dict[str, list[dict]], cfg: Config)
         day_papers = papers_by_day[date_str][:5]  # Top 5 per day for prompt
         if not day_papers:
             continue
-        paper_list = "\n".join(
-            f"- {p.get('title', 'Untitled')}" for p in day_papers
-        )
+        paper_list = "\n".join(f"- {p.get('title', 'Untitled')}" for p in day_papers)
         day_sections.append(f"### {date_str}\n{paper_list}")
 
     if not day_sections:
@@ -177,6 +176,7 @@ Schreibe einen deutschen Narrative (8-12 Sätze), der die Woche zusammenfasst:""
         # Strip any think blocks if present
         raw = score._strip_think(raw) if hasattr(score, "_strip_think") else raw
         return raw.strip()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Catch all failures to ensure pipeline continues - one day's failure shouldn't stop the pipeline
         log.warning("generate_weekly_narrative failed: %s", e)
         return ""

@@ -1,4 +1,5 @@
 """Telegram helper functions for install CLI."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from research_pipeline.config import CFG
 
 class TelegramStatus(NamedTuple):
     """Status result from Telegram check."""
+
     token_valid: bool
     bot_username: str | None
     chat_valid: bool
@@ -40,7 +42,7 @@ def validate_bot_token(token: str) -> tuple[bool, str | None, str | None]:
         if e.code == 401:
             return False, None, "Unauthorized - invalid token"
         return False, None, f"HTTP {e.code}"
-    except Exception as e:
+    except OSError as e:
         return False, None, str(e)
 
 
@@ -56,10 +58,12 @@ def validate_chat_id(token: str, chat_id: str) -> tuple[bool, str | None]:
     try:
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            data=json.dumps({
-                "chat_id": chat_id,
-                "text": test_message,
-            }).encode("utf-8"),
+            data=json.dumps(
+                {
+                    "chat_id": chat_id,
+                    "text": test_message,
+                }
+            ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -72,7 +76,7 @@ def validate_chat_id(token: str, chat_id: str) -> tuple[bool, str | None]:
         if e.code == 400:
             return False, "Bad request - check chat ID"
         return False, f"HTTP {e.code}"
-    except Exception as e:
+    except OSError as e:
         return False, str(e)
 
 
@@ -174,7 +178,7 @@ def test_diagnose() -> dict:
             "bot_username": None,
             "error": f"HTTP {e.code}",
         }
-    except Exception as e:
+    except OSError as e:
         return {
             "success": False,
             "status_code": None,

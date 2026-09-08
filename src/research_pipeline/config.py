@@ -12,7 +12,9 @@ load_dotenv()  # loads .env if present, no-op otherwise
 def _env(key: str, default: str | None = None, *, required: bool = False) -> str:
     val = os.getenv(key, default)
     if required and not val:
-        raise RuntimeError(f"Missing required env var: {key}. Run `research-pipeline-install install` or set it manually.")
+        raise RuntimeError(
+            f"Missing required env var: {key}. Run `research-pipeline-install install` or set it manually."
+        )
     return val or ""
 
 
@@ -107,7 +109,19 @@ def load_config() -> Config:
         feature_autobuild_enabled=_env_bool("FEATURE_AUTOBUILD_ENABLED", False),
         feature_telegram_bot_enabled=_env_bool("FEATURE_TELEGRAM_BOT_ENABLED", False),
         feature_backfill_enabled=_env_bool("FEATURE_BACKFILL_ENABLED", False),
-        arxiv_categories=_env_list("ARXIV_CATEGORIES", ["q-fin.GN", "q-fin.TR", "q-fin.PR", "q-fin.RM", "q-fin.ST", "q-fin.MF", "cs.LG", "stat.ML"]),
+        arxiv_categories=_env_list(
+            "ARXIV_CATEGORIES",
+            [
+                "q-fin.GN",
+                "q-fin.TR",
+                "q-fin.PR",
+                "q-fin.RM",
+                "q-fin.ST",
+                "q-fin.MF",
+                "cs.LG",
+                "stat.ML",
+            ],
+        ),
         arxiv_lookback_hours=_env_int("ARXIV_LOOKBACK_HOURS", 26),
         arxiv_max_results=_env_int("ARXIV_MAX_RESULTS", 200),
         arxiv_fixture_path=_env("ARXIV_FIXTURE_PATH", ""),
