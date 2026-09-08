@@ -152,6 +152,21 @@ def list_top_deep_scored(
     return [dict(row) for row in rows]
 
 
+def list_papers_in_range(
+    conn: sqlite3.Connection,
+    since: datetime,
+    until: datetime,
+) -> list[dict]:
+    """List papers in a datetime range ordered by deep_score DESC NULLS LAST, published_at DESC."""
+    rows = conn.execute(
+        """SELECT * FROM papers
+           WHERE published_at >= ? AND published_at < ?
+           ORDER BY CASE WHEN deep_score IS NULL THEN 1 ELSE 0 END, deep_score DESC, published_at DESC""",
+        (since.isoformat(), until.isoformat()),
+    )
+    return [dict(row) for row in rows]
+
+
 def mark_picked(conn: sqlite3.Connection, arxiv_id: str) -> None:
     """Mark a paper as picked."""
     conn.execute(
@@ -214,7 +229,6 @@ def record_ai_event(
 def migrate_add_deep_score_updated_at(conn: sqlite3.Connection) -> None:
     """Add deep_score_updated_at column if it doesn't exist. Idempotent."""
     try:
-        # Check if column exists
         cursor = conn.execute("PRAGMA table_info(papers)")
         columns = {row[1] for row in cursor.fetchall()}
         if "deep_score_updated_at" not in columns:
@@ -223,7 +237,7 @@ def migrate_add_deep_score_updated_at(conn: sqlite3.Connection) -> None:
             )
             log.info("Added deep_score_updated_at column to papers table")
     except sqlite3.OperationalError:
-        pass  # Column may already exist in some edge cases
+        pass
 
 
 def set_abstract_score(
@@ -233,9 +247,25 @@ def set_abstract_score(
     reason: str,
     tags: list[str],
 ) -> None:
-    """Update abstract score for a paper."""
+    """Update abstract score for a paper (alias for update_abstract_score)."""
     conn.execute(
         """UPDATE papers SET abs_score = ?, abs_reason = ?, abs_tags = ?
+           WHERE arxiv_id = ?""",
+        (score, reason, json.dumps(tags), arxiv_id),
+    )
+
+
+def update_abstract_score(
+    conn: sqlite3.Connection,
+    arxiv_id: str,
+    score: float,
+    reason: str,
+    tags: list[str],
+) -> None:
+    """Update the abstract scoring results for a paper."""
+    conn.execute(
+        """UPDATE papers
+           SET abs_score = ?, abs_reason = ?, abs_tags = ?
            WHERE arxiv_id = ?""",
         (score, reason, json.dumps(tags), arxiv_id),
     )
@@ -246,16 +276,16 @@ def update_deep_score(
     arxiv_id: str,
     result: dict[str, Any],
 ) -> None:
-    """Update deep scoring results for a paper."""
+    """Update deep scoring results for a paper. Also stamps deep_score_updated_at."""
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
-        """UPDATE papers SET
-            deep_score = ?,
-            deep_summary = ?,
-            deep_why = ?,
-            deep_tags = ?,
-            deep_analysis = ?,
-            deep_score_updated_at = ?
+        """UPDATE papers
+           SET deep_score = ?,
+               deep_summary = ?,
+               deep_why = ?,
+               deep_tags = ?,
+               deep_analysis = ?,
+               deep_score_updated_at = ?
            WHERE arxiv_id = ?""",
         (
             result.get("overall_score", 0.0),
